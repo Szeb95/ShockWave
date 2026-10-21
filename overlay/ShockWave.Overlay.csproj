@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ShockWave</AssemblyName>
-    <Version>0.7.0</Version>
+    <Version>0.7.1</Version>
     <RootNamespace>ShockWave.Overlay</RootNamespace>
     <Product>ShockWave</Product>
     <Title>ShockWave</Title>
@@ -42,7 +42,7 @@
     <Content Include="..\bridge\share-limits.mjs" Link="bridge\share-limits.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\shocker-names.mjs" Link="bridge\shocker-names.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\package.json" Link="bridge\package.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
-    <Content Include="..\bridge\node_modules\**\*" Exclude="..\bridge\node_modules\**\*.map;..\bridge\node_modules\**\*.ts;..\bridge\node_modules\.package-lock.json" Link="bridge\node_modules\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\node_modules\**\*" Exclude="..\bridge\node_modules\**\*.map;..\bridge\node_modules\**\*.ts;..\bridge\node_modules\.package-lock.json" Link="bridge\node_modules\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="..\bridge\osc.mjs" Link="bridge\osc.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\config.example.json" Link="bridge\config.example.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
   </ItemGroup>

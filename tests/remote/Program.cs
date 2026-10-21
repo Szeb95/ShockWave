@@ -15,8 +15,9 @@ internal static class Program
         try
         {
             Receiver(); Inventory(); Panel();
+            if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
-            File.WriteAllText(Path.Combine(artifacts, "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet") }));
+            File.WriteAllText(Path.Combine(artifacts, "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
             Console.WriteLine($"Remote connection: {passed} checks passed"); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); File.WriteAllText(Path.Combine(artifacts,"native-failure.txt"),e.ToString()); return 1; }
@@ -105,6 +106,26 @@ internal static class Program
         preview.Controls.Add(page); preview.Show(); Application.DoEvents();
         using var bitmap = new Bitmap(page.Width,page.Height); page.DrawToBitmap(bitmap,page.ClientRectangle); bitmap.Save(Path.Combine(artifacts,"connect-page.png")); preview.Hide();
         Check(!f.Session.Enabled && !f.Session.Connected, "opening Connect page starts no helper, account, Bluetooth or output");
+    }
+    private static void SharingCode()
+    {
+        var package = Environment.GetEnvironmentVariable("SHOCKWAVE_REMOTE_PACKAGE")
+            ?? throw new Exception("Set SHOCKWAVE_REMOTE_PACKAGE for the published sharing-code check.");
+        using var fixture = new Fixture();
+        using var page = new RemotePage(fixture.Session, () => Path.Combine(package, "node.exe"), Path.Combine(package, "bridge"));
+        using var preview = new Form { Width=1050,Height=870,ShowInTaskbar=false,Location=new(-32000,-32000),StartPosition=FormStartPosition.Manual };
+        preview.Controls.Add(page); preview.Show(); Application.DoEvents();
+        T Field<T>(string name) => (T)typeof(RemotePage).GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!.GetValue(page)!;
+        Check(Field<TextBox>("own").Text.Length == 0 && !Field<Button>("copy").Enabled, "sharing code is initially empty without starting a connection");
+        Field<Button>("connect").PerformClick();
+        Wait(() => { Application.DoEvents(); return Field<TextBox>("own").Text.StartsWith("SW1."); }, "Connect button displays the generated sharing code", 15000);
+        Check(fixture.Session.Enabled && Field<TextBox>("own").Text == fixture.Session.Invitation && Field<Button>("copy").Enabled,
+            "actual Connect button fills the code field and enables Copy my code using packaged dependencies");
+        Check(fixture.Adapter.Writes.IsEmpty, "generating a sharing code causes no toy output");
+        Field<Button>("disconnect").PerformClick();
+        Check(!fixture.Session.Enabled && !fixture.Session.Connected && Field<Button>("connect").Enabled,
+            "Disconnect after sharing-code generation restores Connect without starting hardware");
+        preview.Hide();
     }
     private static void Internet()
     {

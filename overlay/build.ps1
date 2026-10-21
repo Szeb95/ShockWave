@@ -37,4 +37,5 @@ if (-not (Test-Path -LiteralPath $exe)) {
 }
 $workerCheck = Join-Path (Split-Path $PSScriptRoot -Parent) 'tests\local-toys\CheckPublishedWorker.ps1'
 & $workerCheck -Executable $exe
+& (Join-Path (Split-Path $PSScriptRoot -Parent) 'tests\remote\CheckPublishedRemoteWorker.ps1') -PackageDirectory $output
 Write-Host "Native overlay ready: $exe"

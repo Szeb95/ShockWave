@@ -13,6 +13,8 @@ Connect is the session's authorization to use connected supported functions and 
 
 Either person can use **Disconnect** at any time. This removes remote inventory, clears remote input and ends peer-owned output leases. Local owner input is independent. Turn Connect back on to reconnect; while the app/code remain valid, the other side can retry automatically if its Connect remains on. Reconnection uses fresh session aliases and starts with zero activity, without restoring patterns or commands. Restarting ShockWave creates a new code. Codes expire for new connections after 24 hours; keep them private.
 
+The sharing code appears after selecting **Connect**, before the setup service connects; your friend does not need to be online yet. If **Connection helper stopped · use Connect to try again** appears with no code in the original 0.7.0 package, use the complete corrected 0.7.1 package. Some connection-library files were bundled inside the EXE where the separate Node helper could not load them. This startup failure is independent of IPv4, router settings and your friend's network. Extract the whole ZIP, keeping its `bridge` folder beside the EXE.
+
 ## Toys and shockers
 
 Remote toy functions use the existing desktop/VR Toy control drawing, Record and Play behavior. Locally connected functions are shared, with up to 32 toys/eight supported scalar functions per toy. Unknown functions and depth/position settings are not shared. Incoming input goes through the existing receiver controller, Sensitivity/Max %, Test mode, scheduler, source ownership, Stop and expiring leases. A receiver edit/Stop invalidates the held peer claim; the sender needs fresh input to take over again. A connection grants no ability to edit the owner's settings, credentials or PC.

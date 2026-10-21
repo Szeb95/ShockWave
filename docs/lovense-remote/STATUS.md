@@ -2,6 +2,12 @@
 
 Updated: 2026-10-21.
 
+## 2026-10-21 — Connect sharing-code fix prepared for 0.7.1
+
+- **Cause and fix:** the 0.7.0 single-file EXE embedded 19 large Node runtime dependency files, leaving the separate connection worker unable to import werift and generate a code. Dependencies are now explicitly external to the EXE. Both build scripts verify all dependency files/hashes and run the actual packaged worker through readiness, private-code generation and clean shutdown before reporting success.
+- **Regression evidence:** 34 native remote checks, including the real Connect button/code field, four simulated toys per direction through the public setup helper and zero-activity reconnect; 69 updater checks; three isolated DLL-free WinExe worker checks; three actual published update-helper checks against fake installations; full ZIP extraction/hash/version verification of 1,363 manifest-listed files. Separate-household connectivity, physical output/Stop, headset behavior and clean-PC installation remain unverified. No real app/device/Unity launch was used in verification.
+- **Release candidate:** 0.7.1 Windows x64 ZIP, 116,007,707 bytes, SHA-256 `f3db25262fadd51b797e1e2e99e6370c5e3574c8dc21ec5574a57173c46c124a`. The owner authorizes publishing this exact tested package as a new stable release so existing 0.7.0 clients can discover it through Update. Preserve the public 0.7.0 assets. Automatic download remains opt-in and installation stays on normal close; no preference, control protocol, TURN policy, receiver limit or Unity behavior changes. Public release metadata/digest acceptance still needs verification after upload.
+
 ## 2026-10-21 — public repository and first release published; 404 resolved
 
 - **Published:** public source at **https://github.com/Szeb95/ShockWave**, default branch `main`, contribution-only source-available LICENSE, README/screenshots, source/build guides, issue/PR templates and both workflows. Topics and private vulnerability reporting are enabled. First stable development-preview release **v0.7.0** is public at **https://github.com/Szeb95/ShockWave/releases/tag/v0.7.0**. The app's **https://github.com/Szeb95/ShockWave/releases/latest** link now returns **HTTP 200**, replacing the reported 404.

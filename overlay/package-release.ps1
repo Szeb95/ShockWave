@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.7.0',
+    [string]$Version = '0.7.1',
     [string]$OutputDirectory = '',
     [string[]]$PublishArguments = @()
 )
@@ -98,6 +98,7 @@ $releaseManifestFiles = @($releaseFiles | ForEach-Object {
 })
 [ordered]@{ format=1; version=$Version; platform='win-x64'; files=$releaseManifestFiles } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $releasePayload 'update-manifest.json') -Encoding utf8
 & (Join-Path $releaseRepo 'tests/local-toys/CheckPublishedWorker.ps1') -Executable (Join-Path $releasePayload 'ShockWave.exe')
+& (Join-Path $releaseRepo 'tests/remote/CheckPublishedRemoteWorker.ps1') -PackageDirectory $releasePayload
 [IO.Compression.ZipFile]::CreateFromDirectory($releasePayload, $releaseZip, [IO.Compression.CompressionLevel]::Optimal, $false)
 $releaseZipHash = (Get-FileHash -LiteralPath $releaseZip -Algorithm SHA256).Hash.ToLowerInvariant()
 "$releaseZipHash  $([IO.Path]::GetFileName($releaseZip))" | Set-Content -LiteralPath "$releaseZip.sha256.txt" -Encoding ascii
