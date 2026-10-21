@@ -51,14 +51,14 @@ internal static class Program
         throw new Exception("Was not rejected: " + message);
     }
     private static string DirectoryFor(string name) { var path = Path.Combine(root, name + "-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(path); return path; }
-    private static Version Current => new(0, 7, 2);
-    private static Version Next => new(0, 7, 3);
+    private static Version Current => new(0, 7, 3);
+    private static Version Next => new(0, 7, 4);
     private static byte[] Release(byte[]? zip = null)
     {
         zip ??= [1, 2, 3];
-        return JsonSerializer.SerializeToUtf8Bytes(new { draft = false, prerelease = false, tag_name = "v0.7.3", html_url = AppUpdater.Repository + "/releases/tag/v0.7.3",
-            assets = new[] { new { name = "ShockWave-0.7.3-win-x64.zip", state = "uploaded", size = zip.Length,
-                digest = "sha256:" + Convert.ToHexString(SHA256.HashData(zip)), browser_download_url = AppUpdater.Repository + "/releases/download/v0.7.3/ShockWave-0.7.3-win-x64.zip" } } });
+        return JsonSerializer.SerializeToUtf8Bytes(new { draft = false, prerelease = false, tag_name = "v0.7.4", html_url = AppUpdater.Repository + "/releases/tag/v0.7.4",
+            assets = new[] { new { name = "ShockWave-0.7.4-win-x64.zip", state = "uploaded", size = zip.Length,
+                digest = "sha256:" + Convert.ToHexString(SHA256.HashData(zip)), browser_download_url = AppUpdater.Repository + "/releases/download/v0.7.4/ShockWave-0.7.4-win-x64.zip" } } });
     }
     private static void ReleaseValidation()
     {
@@ -70,12 +70,12 @@ internal static class Program
             var node = JsonNode.Parse(Release())!; node[property] = true;
             Check(AppUpdater.ParseRelease(Encoding.UTF8.GetBytes(node.ToJsonString()), Current) is null, "exclude " + property);
         }
-        foreach (var invalid in new[] { "v0.7.3-beta", "latest", "v0.7.3;start" })
+        foreach (var invalid in new[] { "v0.7.4-beta", "latest", "v0.7.4;start" })
         {
             var node = JsonNode.Parse(Release())!; node["tag_name"] = invalid;
             Reject(() => AppUpdater.ParseRelease(Encoding.UTF8.GetBytes(node.ToJsonString()), Current), "invalid version");
         }
-        foreach (var url in new[] { "http://github.com/Szeb95/ShockWave/releases/download/v0.7.3/ShockWave-0.7.3-win-x64.zip", "https://github.com/SomeoneElse/Repo/releases/download/v0.7.3/ShockWave-0.7.3-win-x64.zip", "https://github.com.evil.invalid/Szeb95/ShockWave/releases/download/v0.7.3/ShockWave-0.7.3-win-x64.zip" })
+        foreach (var url in new[] { "http://github.com/Szeb95/ShockWave/releases/download/v0.7.4/ShockWave-0.7.4-win-x64.zip", "https://github.com/SomeoneElse/Repo/releases/download/v0.7.4/ShockWave-0.7.4-win-x64.zip", "https://github.com.evil.invalid/Szeb95/ShockWave/releases/download/v0.7.4/ShockWave-0.7.4-win-x64.zip" })
         {
             var node = JsonNode.Parse(Release())!; node["assets"]![0]!["browser_download_url"] = url;
             Reject(() => AppUpdater.ParseRelease(Encoding.UTF8.GetBytes(node.ToJsonString()), Current), "untrusted asset URL");
@@ -106,7 +106,7 @@ internal static class Program
     }
     private static void PackageValidation()
     {
-        var source = DirectoryFor("payload"); MakePackage(source, "0.7.3");
+        var source = DirectoryFor("payload"); MakePackage(source, "0.7.4");
         var destination = Path.Combine(root, "extracted"); var zip = Zip(source);
         var payload = UpdatePackage.Extract(zip, destination, Next);
         Check(File.Exists(Path.Combine(destination, "ShockWave.exe")) && payload.Manifest.Files.Count == 6, "complete package extracts and hashes verify");
@@ -135,11 +135,11 @@ internal static class Program
         }
         Reject(() => UpdatePackage.Extract(linked, Path.Combine(root, "linked"), Next), "archive symlinks are rejected");
     }
-    private static UpdateRequest Request(string stage, string target) => new(target, "0.7.2", "0.7.3", UpdatePackage.Hash(Path.Combine(stage, "payload", UpdatePackage.ManifestName)), -1, 0, false);
+    private static UpdateRequest Request(string stage, string target) => new(target, "0.7.3", "0.7.4", UpdatePackage.Hash(Path.Combine(stage, "payload", UpdatePackage.ManifestName)), -1, 0, false);
     private static void Installation()
     {
-        var stage = DirectoryFor("install-stage"); var source = Path.Combine(stage, "payload"); Directory.CreateDirectory(source); var incoming = MakePackage(source, "0.7.3");
-        var target = DirectoryFor("installed"); MakePackage(target, "0.7.2");
+        var stage = DirectoryFor("install-stage"); var source = Path.Combine(stage, "payload"); Directory.CreateDirectory(source); var incoming = MakePackage(source, "0.7.4");
+        var target = DirectoryFor("installed"); MakePackage(target, "0.7.3");
         File.WriteAllText(Path.Combine(target, "personal-notes.txt"), "keep");
         var settings = DirectoryFor("user-data"); File.WriteAllText(Path.Combine(settings, "api-token.bin"), "fixture-encrypted-token");
         var installLocked = false;
@@ -149,30 +149,30 @@ internal static class Program
             installLocked = Task.Run(() => UpdateInstaller.IsInstalling(target)).GetAwaiter().GetResult();
         });
         Check(installLocked && !UpdateInstaller.IsInstalling(target), "installation blocks another app launch until the transaction ends");
-        Check(File.ReadAllText(Path.Combine(target, "node.exe")).Contains("0.7.3"), "transaction installs incoming program files");
-        Check(UpdatePackage.ReadInstalledManifest(target, Next).Version == "0.7.3", "ownership manifest is committed after program files");
+        Check(File.ReadAllText(Path.Combine(target, "node.exe")).Contains("0.7.4"), "transaction installs incoming program files");
+        Check(UpdatePackage.ReadInstalledManifest(target, Next).Version == "0.7.4", "ownership manifest is committed after program files");
         Check(File.ReadAllText(Path.Combine(target, "personal-notes.txt")) == "keep" && File.ReadAllText(Path.Combine(settings, "api-token.bin")) == "fixture-encrypted-token", "user-added files and external settings are preserved");
         Check(File.Exists(Path.Combine(stage, "backup", "node.exe")), "previous program files retained for recovery");
-        var rollbackStage = DirectoryFor("rollback"); var rollbackPayload = Path.Combine(rollbackStage, "payload"); Directory.CreateDirectory(rollbackPayload); MakePackage(rollbackPayload, "0.7.3");
-        var rollbackTarget = DirectoryFor("old-app"); MakePackage(rollbackTarget, "0.7.2");
+        var rollbackStage = DirectoryFor("rollback"); var rollbackPayload = Path.Combine(rollbackStage, "payload"); Directory.CreateDirectory(rollbackPayload); MakePackage(rollbackPayload, "0.7.4");
+        var rollbackTarget = DirectoryFor("old-app"); MakePackage(rollbackTarget, "0.7.3");
         var before = Directory.GetFiles(rollbackTarget, "*", SearchOption.AllDirectories).ToDictionary(p => Path.GetRelativePath(rollbackTarget, p), UpdatePackage.Hash);
         Reject(() => UpdateInstaller.Apply(rollbackStage, Request(rollbackStage, rollbackTarget), i => { if (i == 3) throw new IOException("injected copy failure"); }), "copy failure triggers rollback");
         Check(before.All(item => UpdatePackage.Hash(Path.Combine(rollbackTarget, item.Key)) == item.Value), "rollback restores every original file including manifest");
-        var collisionTarget = DirectoryFor("user-collision"); MakePackage(collisionTarget, "0.7.2");
+        var collisionTarget = DirectoryFor("user-collision"); MakePackage(collisionTarget, "0.7.3");
         File.WriteAllText(Path.Combine(collisionTarget, "README.txt"), "user added");
         var collisionIncoming = incoming with { Files = [.. incoming.Files, new UpdateFile("README.txt", new string('a', 64))] };
         Reject(() => UpdatePackage.CheckDestination(collisionTarget, collisionIncoming, Current), "incoming file cannot overwrite a user-added collision");
         Reject(() => UpdatePackage.CheckDestination(collisionTarget, incoming with { Version = "0.5.0" }, Current), "helper refuses a downgrade");
-        var lockStage = DirectoryFor("lock-stage"); var lockPayload = Path.Combine(lockStage, "payload"); Directory.CreateDirectory(lockPayload); MakePackage(lockPayload, "0.7.3");
-        var lockTarget = DirectoryFor("locked-app"); MakePackage(lockTarget, "0.7.2");
+        var lockStage = DirectoryFor("lock-stage"); var lockPayload = Path.Combine(lockStage, "payload"); Directory.CreateDirectory(lockPayload); MakePackage(lockPayload, "0.7.4");
+        var lockTarget = DirectoryFor("locked-app"); MakePackage(lockTarget, "0.7.3");
         using (var held = new FileStream(Path.Combine(lockTarget, "node.exe"), FileMode.Open, FileAccess.Read, FileShare.Read))
             Reject(() => UpdateInstaller.Apply(lockStage, Request(lockStage, lockTarget)), "in-use files fail preflight without killing any process");
         Check(!Directory.Exists(Path.Combine(lockStage, "backup")), "in-use preflight fails before the first program write");
     }
     private static void NetworkAndUi()
     {
-        var source = DirectoryFor("network-payload"); MakePackage(source, "0.7.3"); var zip = File.ReadAllBytes(Zip(source));
-        var target = DirectoryFor("network-target"); MakePackage(target, "0.7.2");
+        var source = DirectoryFor("network-payload"); MakePackage(source, "0.7.4"); var zip = File.ReadAllBytes(Zip(source));
+        var target = DirectoryFor("network-target"); MakePackage(target, "0.7.3");
         var handler = new FakeHttp(Release(zip), zip);
         var preference = Path.Combine(root, "update-settings.json");
         using var updater = new AppUpdater(new HttpClient(handler), Current, target, Path.Combine(root, "cache"), preference);
@@ -180,7 +180,7 @@ internal static class Program
         Check(updater.Available is not null && !updater.Busy, "actual async check offers fixture release");
         updater.SetAutomatic(true); Check(updater.Automatic && File.Exists(preference), "automatic update preference saves independently");
         Pump(updater.DownloadAsync());
-        Check(updater.Prepared is not null && File.ReadAllText(Path.Combine(target, "node.exe")).Contains("0.7.2"), "automatic download stages without changing running copy");
+        Check(updater.Prepared is not null && File.ReadAllText(Path.Combine(target, "node.exe")).Contains("0.7.3"), "automatic download stages without changing running copy");
         using var readBack = new AppUpdater(new HttpClient(new FakeHttp(Release(zip), zip)), Current, target, Path.Combine(root, "cache2"), preference);
         Check(readBack.Automatic, "automatic update restores on next session");
         using var page = new UpdatePage(updater) { Size = new(720, 590) };
@@ -223,7 +223,7 @@ internal static class Program
         using var missing = new AppUpdater(new HttpClient(new FakeHttp([], []) { Status = HttpStatusCode.NotFound }), Current, target, Path.Combine(root, "missing"));
         Pump(missing.CheckAsync()); Check(missing.Available is null && missing.Status.Contains("No public release"), "unpublished repository is reported honestly");
         using var corrupt = new AppUpdater(new HttpClient(new FakeHttp(Release(zip), [1, 2, 3])), Current, target, Path.Combine(root, "corrupt"));
-        Pump(corrupt.CheckAsync()); Pump(corrupt.DownloadAsync()); Check(corrupt.Prepared is null && File.ReadAllText(Path.Combine(target, "node.exe")).Contains("0.7.2"), "interrupted/wrong-size download leaves current installation intact");
+        Pump(corrupt.CheckAsync()); Pump(corrupt.DownloadAsync()); Check(corrupt.Prepared is null && File.ReadAllText(Path.Combine(target, "node.exe")).Contains("0.7.3"), "interrupted/wrong-size download leaves current installation intact");
         var badHashBytes = (byte[])zip.Clone(); badHashBytes[32] ^= 1;
         using var badHash = new AppUpdater(new HttpClient(new FakeHttp(Release(zip), badHashBytes)), Current, target, Path.Combine(root, "bad-hash"));
         Pump(badHash.CheckAsync()); Pump(badHash.DownloadAsync());
@@ -255,8 +255,8 @@ internal static class Program
     {
         exe = Path.GetFullPath(published);
         var stage = Path.Combine(root, Guid.NewGuid().ToString("N")); Directory.CreateDirectory(stage);
-        var payload = Path.Combine(stage, "payload"); Directory.CreateDirectory(payload); MakePackage(payload, "0.7.3");
-        var target = DirectoryFor("published-helper-target"); MakePackage(target, "0.7.2");
+        var payload = Path.Combine(stage, "payload"); Directory.CreateDirectory(payload); MakePackage(payload, "0.7.4");
+        var target = DirectoryFor("published-helper-target"); MakePackage(target, "0.7.3");
         File.WriteAllText(Path.Combine(target, "user-note.txt"), "keep");
         var request = Request(stage, target) with { ParentId = int.MaxValue };
         var requestPath = Path.Combine(stage, "request.json"); File.WriteAllText(requestPath, JsonSerializer.Serialize(request, AppUpdater.Json));
@@ -265,7 +265,7 @@ internal static class Program
         start.ArgumentList.Add("--apply-update"); start.ArgumentList.Add(requestPath);
         using var process = Process.Start(start)!;
         Check(process.WaitForExit(25000), "published single-file helper finishes without starting the normal app");
-        Check(process.ExitCode == 0 && UpdatePackage.ReadInstalledManifest(target, Next).Version == "0.7.3", "published helper applies verified fake install");
+        Check(process.ExitCode == 0 && UpdatePackage.ReadInstalledManifest(target, Next).Version == "0.7.4", "published helper applies verified fake install");
         Check(File.ReadAllText(Path.Combine(target, "user-note.txt")) == "keep", "published helper preserves user files");
     }
     private static T Field<T>(object value, string name) => (T)value.GetType().GetField(name, Hidden)!.GetValue(value)!;

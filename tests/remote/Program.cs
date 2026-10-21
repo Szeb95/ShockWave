@@ -258,6 +258,15 @@ internal static class Program
         Vrc("InPointerLPress",false); graph.Tick(ToyOscRouter.Clock); Vrc("InPointerLPress",true); graph.Tick(ToyOscRouter.Clock);
         Check(sender.Session.Toys.Levels().Single().Claim>pointer.Claim,"fresh avatar pointer resumes without selecting the row again");
         graph.StopAll(); Check(graph.Model.SelectedCount==0 && sender.Session.Toys.Levels().Length==0,"explicit Stop all still clears selection and activity");
+        using var mixed = new ToyControlSession(()=>sender.Adapter.Snapshot,()=>sender.Controller) {Remote=sender.Session.Toys};
+        mixed.Tick(ToyOscRouter.Clock);
+        mixed.Action("InRow2",false); mixed.Draw(new(600,300),false,true); mixed.Release(false); mixed.Tick(ToyOscRouter.Clock);
+        var background = sender.Session.Toys.Levels().Single();
+        mixed.Action("InRow2",false); mixed.Action("InRow0",false); mixed.Action("InRecord",false);
+        mixed.Draw(new(600,300),false,true); mixed.Tick(ToyOscRouter.Clock);
+        sender.Session.Toys.Reject(background.Device,background.Channel,background.Claim); mixed.Tick(ToyOscRouter.Clock);
+        Check(mixed.Model.Touching && mixed.Model.Recording && sender.Controller.State("fixture","v1").RequestedPercent>0,
+            "a deselected remote toy timing out cannot interrupt recording on an unrelated local toy");
     }
     private static void Panel()
     {

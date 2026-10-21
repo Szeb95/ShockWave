@@ -128,7 +128,7 @@ internal sealed class ToyControlSession : IDisposable
             // Selection is the user's editing choice, not an output lease.
             // Keep it while cancelling the old loop/capture. A held press must
             // release before fresh input can acquire another claim.
-            if (Model.Touching)
+            if (Model.Touching && row.Selected)
             {
                 blockDesktop = !drawingVrc; Model.Release(false); Vrc.BlockTouch();
             }

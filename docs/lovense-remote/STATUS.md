@@ -2,6 +2,12 @@
 
 Updated: 2026-10-22.
 
+## 2026-10-22 — 0.7.4 follow-up preserves unrelated recordings
+
+- **Correction:** final review of the 0.7.3 selection change found that a deselected/background remote toy rejecting its claim could cancel an unrelated foreground recording. The remote reset now releases held drawing only when the affected row participates in that drawing. A new simulated local-recording/remote-timeout fixture verifies that the local capture and its output lease continue. The original toy-jitter, retained-selection, held-input release, SPS and owner Stop rules remain in force.
+- **0.7.3 publication evidence:** public source/tag `9a3ad89dfcb200128d8791d5147f72503b7c2a93`, successful hosted run `39691667133`, 69 remote / 55 Node / 236 SPS / 124 Toy control / 95 local-toy / 69 updater checks. Production updater anonymously downloaded/validated public 0.7.3 for 0.7.2 without installing or restarting anything. Its assets remain preserved.
+- **0.7.4 candidate:** complete package has 1,363 manifest files, 116,006,325-byte ZIP, SHA-256 `ea0ce32cf63b17a3500a27a3307d4a8e8bd05b6b75b628a027ede216d607d474`. Packaged worker startup and dependency hashes pass. Full local/native/public-helper checks are running; hosted source checks and final public updater verification must complete before delivery. Evidence: `work/remote-jitter-final-checks/`. No normal app/device action, configuration change or Unity project is involved. Both friends' separate-network/physical retest remains pending.
+
 ## 2026-10-22 — remaining remote selection loss / Internet jitter fix in 0.7.3
 
 - **Owner evidence:** both apps are confirmed on 0.7.2. SPS now recovers, but the remote toy still loses selection after random seconds while Connect stays Connected; the supplied screenshot reports 152 ms RTT. A new simulated receiver-expiry/rejection fixture reproduces selection loss on the previous source. Network timing is a corroborated software failure path, not a trace proving every physical incident's cause.
