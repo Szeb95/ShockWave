@@ -2,6 +2,12 @@
 
 Updated: 2026-10-21.
 
+## 2026-10-21 — 0.7.1 public and updater download verified
+
+- **Published:** [0.7.1](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.1) is the latest stable release. Its 116,007,707-byte Windows ZIP and checksum are uploaded; GitHub reports the expected SHA-256 `f3db25262fadd51b797e1e2e99e6370c5e3574c8dc21ec5574a57173c46c124a`. Existing 0.7.0 assets are preserved. The matching source/tag commit is `2f384a9aa245f25a16d5a1438de3650424f77d52`; [hosted Source checks](https://github.com/Szeb95/ShockWave/actions/runs/39679052216) pass.
+- **Public update path:** the production updater anonymously discovers 0.7.1 for a 0.7.0 version, downloads the complete GitHub asset, checks its digest/size/version and all package files, then stages it against an isolated fake installation using the original 0.7.0 ownership manifest. No actual app installation/restart, hardware, preferences or Unity project is touched. Live installed upgrade and physical/network/headset verification remain separate.
+- **Availability:** existing 0.7.0 users can use Update → Check for updates → Update. Existing Automatic update opt-in downloads after the next check and installs at normal close without reopening. Older versions without the updater require the full ZIP. The manually uploaded asset is the exact tested local package; the separate hosted packaging workflow remains unrun.
+
 ## 2026-10-21 — Connect sharing-code fix prepared for 0.7.1
 
 - **Cause and fix:** the 0.7.0 single-file EXE embedded 19 large Node runtime dependency files, leaving the separate connection worker unable to import werift and generate a code. Dependencies are now explicitly external to the EXE. Both build scripts verify all dependency files/hashes and run the actual packaged worker through readiness, private-code generation and clean shutdown before reporting success.

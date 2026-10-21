@@ -31,10 +31,10 @@ Another running copy or worker can prevent installation. The updater does not fo
 Publisher instructions:
 
 ```powershell
-./overlay/package-release.ps1 -Version 0.7.0
+./overlay/package-release.ps1 -Version 0.7.1
 ```
 
-Use a new numeric version for each future release. The command refuses an existing output path and builds `ShockWave-VERSION-win-x64.zip`, its SHA-256 sidecar and a complete package folder. It includes pinned .NET/Node/Bluetooth dependencies, notices, the project license, user guides and optional editor source. It excludes private settings, proprietary legacy BLE DLLs and debug files. It runs DLL-free hidden-worker startup checks.
+Use a new numeric version for each future release. The command refuses an existing output path and builds `ShockWave-VERSION-win-x64.zip`, its SHA-256 sidecar and a complete package folder. It includes pinned .NET/Node/Bluetooth dependencies, notices, the project license, user guides and optional editor source. It excludes private settings, proprietary legacy BLE DLLs and debug files. It verifies all external Node runtime dependencies and sharing-code generation, as well as DLL-free hidden-worker startup checks.
 
 Publish the ZIP as a release asset at a matching `vVERSION` or `VERSION` stable tag in the intended repository. The **Prepare Windows release** GitHub workflow packages/checks a version and creates a draft; the owner publishes the finished release. Drafts/prereleases are not offered by the app. The release workflow itself still needs its first GitHub-hosted run after the repository exists.
 
@@ -49,3 +49,6 @@ The helper is copied from the running app, waits for the exact parent process to
 `tests/update` uses fake releases/HTTP, fake installations, simulated activity and offscreen controls. It checks version filtering, repository/hash checks, unsafe archives, ownership conflicts, in-use files, failed-copy rollback, update navigation, automatic preferences, normal-close install and manual-close cancellation/restart. The published-helper check uses the real packaged EXE only in its update-helper mode against isolated fake app files.
 
 These checks do not establish a live GitHub-to-installed-version update, physical toy stopping, headset behavior or a clean Windows installation. Those remain separate verification steps after a public release exists.
+
+
+Public 0.7.1 discovery, complete download, digest/manifest validation and staging have also been verified through the production updater with an isolated fake installation using the original 0.7.0 ownership manifest. This does not install or restart a real app.
