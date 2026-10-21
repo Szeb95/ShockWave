@@ -2,6 +2,10 @@ import { RTCPeerConnection } from 'werift';
 import { randomBytes, createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 export const DIRECT_ICE = Object.freeze([{ urls: 'stun:stun.l.google.com:19302' }]);
+// Continuous toy state needs room for Internet RTT, conservative clock error
+// and both UI/IPC hops. Discrete shock commands retain their shorter deadline.
+export const STATE_LIFETIME_MS = 500;
+export const messageLifetimeMs = kind => kind === 'state' ? STATE_LIFETIME_MS : kind === 'shock' ? 250 : 3000;
 const nonce = () => randomBytes(24).toString('hex');
 const digest = text => createHash('sha256').update(text).digest('hex');
 const fingerprint = sdp => {
@@ -124,10 +128,10 @@ export class DirectPeer {
       }
       if (msg.version !== 1 || msg.session !== this.session || !Number.isSafeInteger(msg.sequence) || msg.sequence <= (this.lastSequence.get(msg.kind) ?? 0) || !Number.isSafeInteger(msg.sentAt)) return;
       const age = Date.now() - (msg.sentAt - this.offset);
-      if (age < -this.uncertainty || age + this.uncertainty > (msg.kind === 'state' || msg.kind === 'shock' ? 250 : 3000)) return;
+      if (age < -this.uncertainty || age + this.uncertainty >= messageLifetimeMs(msg.kind)) return;
       if (!['inventory', 'state', 'shock', 'result', 'stop'].includes(msg.kind) || (channel === 'sw-state' && msg.kind !== 'state')) return;
       this.lastSequence.set(msg.kind, msg.sequence); this.lastRx = performance.now();
-      this.event({ kind: 'message', message: msg, receivedAt: Date.now(), remainingMs: Math.max(0, 250 - Math.max(0, age) - this.uncertainty) });
+      this.event({ kind: 'message', message: msg, receivedAt: Date.now(), remainingMs: messageLifetimeMs(msg.kind) - Math.max(0, age) - this.uncertainty });
     } catch { this.close('Invalid peer connection'); }
   }
   ping() { const id = nonce(); const t1 = Date.now(); this.pings.clear(); this.pings.set(id, t1); this.sendRaw({ kind: 'ping', id, t1 }); }

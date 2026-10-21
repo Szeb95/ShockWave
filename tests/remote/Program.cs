@@ -15,7 +15,7 @@ internal static class Program
         Application.EnableVisualStyles();
         try
         {
-            Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); Panel();
+            Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); Panel();
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
             File.WriteAllText(Path.Combine(artifacts, "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
@@ -182,6 +182,82 @@ internal static class Program
             "owner Stop cannot be hidden by later remote claim/release or a pre-Stop neutral contact");
         Contact(0); Wait(()=>!receiver.Controller.State("fixture","v1").Stopping,"owner Stop rearm zero completes"); Contact(.3f);
         Check(receiver.Controller.State("fixture","v1").RequestedPercent==30,"a new neutral and rise still rearm SPS after an explicit owner Stop");
+    }
+    private static void InternetTiming()
+    {
+        // 152 ms RTT: about 80 ms one-way age, 81 ms clock uncertainty,
+        // plus 35 ms in the receiving UI. Periodic 180 ms delivery gaps
+        // revoke the old 250 ms claim even though the peer remains connected.
+        var life = RemoteSession.RemainingLifetime("state",RemoteSession.StateLifetimeMs-80-81,35);
+        using var owner = new Fixture();
+        var toy = owner.Session.PublishInventory().Toys.Single();
+        var frame = new RemoteLevel(toy.Id,toy.Functions[0].Id,65,1);
+        for(var i=0;i<8;i++) { owner.Session.Receive("state",Element(new[]{frame}),life); Thread.Sleep(180); }
+        Check(owner.Controller.State("fixture","v1").RequestedPercent==65,"152 ms RTT and bounded delivery gaps do not revoke a healthy remote claim");
+        Wait(()=>owner.Controller.State("fixture","v1").RequestedPercent==0,"missing fresh updates still stop output independently of the UI",1000);
+        Check(owner.Controller.State("fixture","v1").RequestedPercent==0,"Internet jitter allowance remains bounded and silence stops output");
+        owner.Session.Receive("state",Element(new[]{frame}));
+        Check(owner.Controller.State("fixture","v1").RequestedPercent==0,"an expired claim remains blocked after network recovery");
+        Check(RemoteSession.RemainingLifetime("state",80,80)==0 && RemoteSession.RemainingLifetime("state",80,81)==0,
+            "worker-to-UI expiry cannot be rounded up into a new lease");
+        Check(RemoteSession.RemainingLifetime("state",500,30)==470 && RemoteSession.RemainingLifetime("shock",500,30)==220,
+            "only continuous toy state gains jitter tolerance; shock commands retain 250 ms total expiry");
+        Check(RemoteSession.RemainingLifetime("state",double.NaN,0)==0 && RemoteSession.RemainingLifetime("state",500,-11)==0,
+            "invalid timing cannot mint a fresh output lease");
+    }
+    private static void RemoteTimeoutSelection()
+    {
+        using var receiver = new Fixture(); using var sender = new Fixture();
+        sender.Session.Toys.Replace(receiver.Session.PublishInventory().Toys);
+        using var graph = new ToyControlSession(() => null, () => null) { Remote=sender.Session.Toys };
+        graph.Tick(ToyOscRouter.Clock); graph.Action("InRow0",false);
+        var row = graph.Model.Functions.First();
+        row.Function.Pattern = new ShockWave.ShaderLab.PatternClip([new(0,.4f),new(1,.7f)]);
+        graph.Action("InPlay",false); graph.Tick(ToyOscRouter.Clock);
+        var frame = sender.Session.Toys.Levels().Single();
+        receiver.Session.Receive("state",Element(new[]{frame}),30);
+        Wait(()=>receiver.Controller.State("fixture","v1").RequestedPercent==0,"a network gap still expires the receiving motor lease");
+        receiver.Session.Receive("state",Element(new[]{frame}));
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent==0,"a later packet cannot revive the expired drawing");
+        sender.Session.Toys.Reject(frame.Device,frame.Channel,frame.Claim); graph.Tick(ToyOscRouter.Clock);
+        row = graph.Model.Functions.First();
+        Check(row.Selected && !row.Function.LoopRunning && row.Function.Level==0 && sender.Session.Toys.Levels().Length==0,
+            "remote timeout keeps the user's selection but stops the loop and all outgoing activity");
+        graph.Tick(ToyOscRouter.Clock);
+        Check(sender.Session.Toys.Levels().Length==0,"keeping a row selected never rearms expired output on its own");
+        graph.Action("InPlay",false); graph.Tick(ToyOscRouter.Clock);
+        var fresh = sender.Session.Toys.Levels().Single();
+        Check(fresh.Claim>frame.Claim,"fresh Play can restart the selected remote toy without selecting it again");
+        sender.Session.Toys.Reject(frame.Device,frame.Channel,frame.Claim); graph.Tick(ToyOscRouter.Clock);
+        Check(sender.Session.Toys.Levels().Single().Claim==fresh.Claim,"a delayed old rejection cannot stop a fresh drawing");
+        graph.Draw(new(600,300),false,true); graph.Tick(ToyOscRouter.Clock);
+        var held = sender.Session.Toys.Levels().Single();
+        sender.Session.Toys.Reject(held.Device,held.Channel,held.Claim);
+        // A mouse move may observe the rejection before the normal graph timer.
+        graph.Draw(new(600,200),false); graph.Tick(ToyOscRouter.Clock);
+        Check(graph.Model.Functions.First().Selected && sender.Session.Toys.Levels().Length==0,
+            "a held mouse cannot silently reclaim a rejected remote toy");
+        graph.Release(false); graph.Draw(new(600,300),false,true); graph.Tick(ToyOscRouter.Clock);
+        Check(sender.Session.Toys.Levels().Single().Claim>held.Claim,"release and a fresh press restart control while retaining selection");
+        graph.Release(false);
+        void Vrc(string name, object value) => graph.Vrc.Apply(new("/avatar/parameters/SzebsToy_"+name,[value]),ToyOscRouter.Clock);
+        Vrc("Visible",true); Vrc("InBeat",true); graph.Tick(ToyOscRouter.Clock);
+        Vrc("InX",.5f); Vrc("InY",.6f); Vrc("InTouch",true); graph.Tick(ToyOscRouter.Clock);
+        var vr = sender.Session.Toys.Levels().Single();
+        sender.Session.Toys.Reject(vr.Device,vr.Channel,vr.Claim); graph.Tick(ToyOscRouter.Clock); graph.Tick(ToyOscRouter.Clock);
+        Check(graph.Model.Functions.First().Selected && sender.Session.Toys.Levels().Length==0,
+            "a held avatar touch keeps selection without reclaiming rejected output");
+        Vrc("InTouch",false); graph.Tick(ToyOscRouter.Clock); Vrc("InTouch",true); graph.Tick(ToyOscRouter.Clock);
+        Check(sender.Session.Toys.Levels().Single().Claim>vr.Claim,"fresh avatar touch resumes without selecting the row again");
+        Vrc("InTouch",false); graph.Tick(ToyOscRouter.Clock); graph.Action("InInputMode",false);
+        Vrc("InPointerLHit",true); Vrc("InPointerLX",.5f); Vrc("InPointerLY",.6f); Vrc("InPointerLPress",true); graph.Tick(ToyOscRouter.Clock);
+        var pointer = sender.Session.Toys.Levels().Single();
+        sender.Session.Toys.Reject(pointer.Device,pointer.Channel,pointer.Claim); graph.Tick(ToyOscRouter.Clock); graph.Tick(ToyOscRouter.Clock);
+        Check(graph.Model.Functions.First().Selected && sender.Session.Toys.Levels().Length==0,
+            "a held avatar pointer keeps selection without reclaiming rejected output");
+        Vrc("InPointerLPress",false); graph.Tick(ToyOscRouter.Clock); Vrc("InPointerLPress",true); graph.Tick(ToyOscRouter.Clock);
+        Check(sender.Session.Toys.Levels().Single().Claim>pointer.Claim,"fresh avatar pointer resumes without selecting the row again");
+        graph.StopAll(); Check(graph.Model.SelectedCount==0 && sender.Session.Toys.Levels().Length==0,"explicit Stop all still clears selection and activity");
     }
     private static void Panel()
     {

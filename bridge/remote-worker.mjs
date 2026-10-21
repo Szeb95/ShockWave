@@ -1,7 +1,7 @@
 import { randomBytes, createHmac, timingSafeEqual } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import WebSocket from 'ws';
-import { DirectPeer, makeInvitation, parseInvitation } from './remote-peer.mjs';
+import { DirectPeer, makeInvitation, parseInvitation, messageLifetimeMs } from './remote-peer.mjs';
 
 const emit = value => process.stdout.write(JSON.stringify(value) + '\n');
 const id = 'sw-' + randomBytes(16).toString('hex');
@@ -77,7 +77,7 @@ input.on('line', line => {
     } else if (msg.kind === 'disable') disable();
     else if (msg.kind === 'send' && ['inventory', 'state', 'shock', 'result', 'stop'].includes(msg.type)) {
       const age = Date.now() - msg.createdAt;
-      if (Number.isSafeInteger(msg.createdAt) && age >= -10 && age <= (msg.type === 'state' || msg.type === 'shock' ? 250 : 3000))
+      if (Number.isSafeInteger(msg.createdAt) && age >= -10 && age < messageLifetimeMs(msg.type))
         peer?.send(msg.type, msg.payload, msg.type === 'state', msg.createdAt);
     }
   } catch { disable(); emit({ kind: 'error', detail: 'Invalid or expired connection code. Connect is off.' }); }

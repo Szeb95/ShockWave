@@ -1,7 +1,66 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
-import { DirectPeer, makeInvitation, parseInvitation, validateDescription, DIRECT_ICE } from './remote-peer.mjs';
+import { DirectPeer, makeInvitation, parseInvitation, validateDescription, DIRECT_ICE, STATE_LIFETIME_MS, messageLifetimeMs } from './remote-peer.mjs';
+
+test('toy jitter budget preserves original age and clock uncertainty; shock expiry remains shorter', t => {
+  const now = 1000000, offset = 120000, events = [];
+  t.mock.method(Date, 'now', () => now);
+  const peer = Object.assign(Object.create(DirectPeer.prototype), { closed: false, authenticated: true, ready: true,
+    offset, uncertainty: 81, session: 'fixture', lastSequence: new Map(), event: e => events.push(e) });
+  let sequence = 0;
+  const deliver = (kind, age) => peer.receive(JSON.stringify({ version: 1, session: 'fixture', kind,
+    sequence: ++sequence, sentAt: now + offset - age, payload: [] }), kind === 'state' ? 'sw-state' : 'sw-control');
+  deliver('state', 80);
+  assert.equal(STATE_LIFETIME_MS, 500);
+  assert.equal(events.length, 1);
+  assert.equal(events[0].remainingMs, 339); // 500 minus one-way age and conservative RTT/2 + 5 error.
+  deliver('state', 300); // Delayed but still fresh: the old 250 ms mode dropped this.
+  assert.equal(events.length, 2); assert.equal(events[1].remainingMs, 119);
+  deliver('state', 419); deliver('state', 500); deliver('state', -82);
+  assert.equal(events.length, 2, 'expired/boundary/future state cannot renew a motor');
+  deliver('shock', 170);
+  assert.equal(events.length, 2, '500 ms toy tolerance must never extend shock expiry');
+  deliver('shock', 80);
+  assert.equal(events.at(-1).remainingMs, 89);
+  assert.equal(messageLifetimeMs('shock'), 250);
+  assert.equal(messageLifetimeMs('inventory'), 3000);
+});
+
+test('real encrypted peers sustain toy state with 150 ms RTT, jitter and loss, then expire silence', { timeout: 30000 }, async () => {
+  const peers = [], events = [[], []], secret = randomBytes(32).toString('hex');
+  let stream, leaseDeadline = 0, lapse = false, received = 0;
+  try {
+    for (let i = 0; i < 2; i++) peers.push(new DirectPeer({ secret, initiator: i === 0, iceServers: [],
+      signal: (type, payload) => setTimeout(() => peers[1-i].accept(type, payload).catch(() => {}), 0),
+      event: e => events[i].push(e) }));
+    await peers[0].offer(); await wait(() => peers.every(p => p.ready));
+    for (const peer of peers) {
+      const send = peer.sendRaw.bind(peer);
+      peer.sendRaw = (value, fast = false) => {
+        if (value.kind === 'state' && value.sequence % 7 === 0) return true; // dropped, never replayed
+        const delay = value.kind === 'state' && value.sequence % 5 === 0 ? 145 : 75;
+        setTimeout(() => send(value, fast), delay); return true;
+      };
+    }
+    await wait(() => peers.every(p => p.uncertainty >= 75 && p.uncertainty < 120));
+    peers[1].event = e => {
+      events[1].push(e);
+      if (e.message?.kind === 'state') {
+        // Account for a receiving UI hop, without timestamping this packet fresh.
+        setTimeout(() => { if (leaseDeadline && Date.now() >= leaseDeadline) lapse = true;
+          leaseDeadline = e.receivedAt + e.remainingMs; received++; }, 25);
+      }
+    };
+    stream = setInterval(() => peers[0].send('state', [{ percent: 65, claim: 1 }], true), 33);
+    await new Promise(r => setTimeout(r, 5000)); clearInterval(stream); stream = null;
+    assert.ok(received > 75, 'sustained state reaches the receiver despite deliberately lost updates');
+    assert.equal(lapse, false, 'normal Internet delay must not revoke a healthy drawing');
+    assert.ok(peers.every(p => p.ready), 'connection remains active during drawing');
+    await new Promise(r => setTimeout(r, STATE_LIFETIME_MS + 200));
+    assert.ok(Date.now() >= leaseDeadline, 'silence expires output while the connection remains active');
+  } finally { clearInterval(stream); for (const peer of peers) peer.close(); }
+});
 
 const wait = async condition => { const deadline = Date.now() + 18000; while (!condition()) { if (Date.now() > deadline) throw new Error('Direct peer timeout'); await new Promise(r => setTimeout(r, 20)); } };
 test('invitations validate format, secret, expiry; no TURN configuration is accepted', () => {

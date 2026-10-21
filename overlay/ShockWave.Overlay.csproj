@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ShockWave</AssemblyName>
-    <Version>0.7.2</Version>
+    <Version>0.7.3</Version>
     <RootNamespace>ShockWave.Overlay</RootNamespace>
     <Product>ShockWave</Product>
     <Title>ShockWave</Title>

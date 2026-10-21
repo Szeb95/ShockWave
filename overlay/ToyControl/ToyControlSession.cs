@@ -17,6 +17,7 @@ internal sealed class ToyControlSession : IDisposable
     private LocalToyController? controller;
     private string inventorySignature = "";
     private bool drawingVrc, disposed, blockDesktop;
+    private int remoteResetRevision;
     private readonly TimeSpan leaseLife = TimeSpan.FromSeconds(2);
     public PanelModel Model { get; } = new() { AdaptivePaging = true };
     public RemoteToyController? Remote { get; set; }
@@ -62,7 +63,7 @@ internal sealed class ToyControlSession : IDisposable
             if (row is null || !row.Connected || binding.Vrc && !Vrc.IsLive)
             { End(key, reset: true); continue; }
             if (!binding.Controller.UpdateInput(binding.Lease, Percent(row.Function.Level), leaseLife))
-            { bindings.Remove(key); ResetFromOwner(key); Notice = "Control reset · use fresh input"; }
+            { bindings.Remove(key); ResetFromOwner(key); if (!key.Toy.StartsWith("remote/", StringComparison.Ordinal)) Notice = "Control reset · use fresh input"; }
         }
     }
     private static int Percent(float level) => (int)Math.Round(Math.Clamp(level, 0, 1) * 100);
@@ -115,12 +116,25 @@ internal sealed class ToyControlSession : IDisposable
     private void ResetFromOwner((string Toy, string Function) key)
     {
         var row = Find(key); if (row is null) return;
+        var remote = key.Toy.StartsWith("remote/", StringComparison.Ordinal);
         var level = row.Connected ? (State(key)?.RequestedPercent ?? 0) / 100f : 0;
         // Explicit replacement changes this target's generation, cancels its
         // unfinished recording/loop, and cannot affect sibling recordings.
         Model.Upsert(new(row.Toy.Id, row.Toy.Name, row.Toy.Connected, row.Toy.Battery, null,
             row.Toy.Functions.Select(f => new FunctionUpdate(f.Id, f.Name, f.Id == key.Function ? level : null)).ToArray()));
-        if (Find(key) is { } updated) updated.Function.Selected = false;
+        if (remote)
+        {
+            remoteResetRevision++;
+            // Selection is the user's editing choice, not an output lease.
+            // Keep it while cancelling the old loop/capture. A held press must
+            // release before fresh input can acquire another claim.
+            if (Model.Touching)
+            {
+                blockDesktop = !drawingVrc; Model.Release(false); Vrc.BlockTouch();
+            }
+            Notice = "Remote toy stopped · draw again or press Play";
+        }
+        else if (Find(key) is { } updated) updated.Function.Selected = false;
     }
     private bool Ready(bool vrc)
     {
@@ -147,7 +161,8 @@ internal sealed class ToyControlSession : IDisposable
         if(ShockerPage) return;
         if(!vrc && freshPress) blockDesktop=false;
         if(!vrc && blockDesktop) return;
-        if (!Ready(vrc)) return;
+        var resetRevision = remoteResetRevision;
+        if (!Ready(vrc) || resetRevision != remoteResetRevision || !vrc && blockDesktop) return;
         if(!vrc) Vrc.BlockTouch();
         if (Model.Touching && drawingVrc != vrc) Model.Release(false);
         var fresh = !Model.Touching; drawingVrc = vrc;

@@ -11,6 +11,7 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
     Func<BridgeConfig> config, Action<string, string, int, int, long> shock) : IDisposable
 {
     internal static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
+    internal const int StateLifetimeMs = 500;
     private sealed record Alias(string Device, string Function, LocalToyController Controller);
     private sealed record OwnedLease(ToyInputLease Lease, LocalToyController Controller, long Claim);
     private readonly Dictionary<(string, string), string> aliases = [];
@@ -84,8 +85,9 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
                         if (!Connected || message.GetProperty("session").GetString() != session) break;
                         var elapsed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - item.GetProperty("receivedAt").GetInt64();
                         var type = message.GetProperty("kind").GetString();
-                        if (elapsed < -10 || elapsed > (type is "state" or "shock" ? item.GetProperty("remainingMs").GetDouble() : 3000)) break;
-                        Receive(type!, message.GetProperty("payload"), Math.Clamp(item.GetProperty("remainingMs").GetDouble() - Math.Max(0, elapsed), 1, 250)); break;
+                        var lifetime = RemainingLifetime(type!, item.GetProperty("remainingMs").GetDouble(), elapsed);
+                        if (lifetime <= 0) break;
+                        Receive(type!, message.GetProperty("payload"), lifetime); break;
                 }
             }
             catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or ArgumentException or OverflowException)
@@ -122,7 +124,14 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
         if (text != lastInventory) { lastInventory = text; Send("inventory", next); }
         return next;
     }
-    internal void Receive(string type, JsonElement payload, double remainingMs = 250)
+    // Consume worker-to-UI time too; never round an expired packet up to a new lease.
+    internal static double RemainingLifetime(string type, double remainingMs, long elapsed)
+    {
+        var maximum = type == "state" ? StateLifetimeMs : type == "shock" ? 250 : 3000;
+        if (elapsed < -10 || !double.IsFinite(remainingMs)) return 0;
+        return Math.Max(0, Math.Min(remainingMs, maximum) - Math.Max(0, elapsed));
+    }
+    internal void Receive(string type, JsonElement payload, double remainingMs = StateLifetimeMs)
     {
         if (type == "inventory")
         {
