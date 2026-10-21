@@ -1,0 +1,45 @@
+name: Bug report
+description: Report a reproducible problem in ShockWave.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Keep API keys, connection codes, private device IDs and personal settings out of this report. For vulnerabilities, follow SECURITY.md."
+  - type: input
+    id: version
+    attributes:
+      label: ShockWave and Windows versions
+      placeholder: "ShockWave 0.6.0 preview, Windows 11 x64"
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Include the affected page and selected backend. Identify a model if needed, without its private ID or Bluetooth address.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected and actual result
+    validations:
+      required: true
+  - type: dropdown
+    id: evidence
+    attributes:
+      label: Where did this happen?
+      multiple: true
+      options:
+        - Desktop interface
+        - Simulated devices / automated checks
+        - Physical hardware
+        - VRChat / headset
+        - Connection between two PCs
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Additional details or redacted screenshot
+      description: Share only the minimum needed. Do not upload your personal settings folder.

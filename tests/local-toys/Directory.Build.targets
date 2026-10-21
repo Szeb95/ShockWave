@@ -1,0 +1,6 @@
+<Project>
+  <!-- LocalToyChecks.cs is active; a stale shared-workspace copy can reappear at the old path. -->
+  <ItemGroup>
+    <Compile Remove="Program.cs" />
+  </ItemGroup>
+</Project>

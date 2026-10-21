@@ -1,0 +1,9 @@
+{
+  "name": "ShockWave.ToyControlEditor.Editor",
+  "rootNamespace": "ShockWave.ToyControl",
+  "references": ["VRC.SDK3A", "com.vrcfury.api"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true,
+  "overrideReferences": false,
+  "noEngineReferences": false
+}

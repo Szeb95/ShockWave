@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>ShockWaveShaderLab</AssemblyName>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <DebugType>none</DebugType>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <DefaultItemExcludes>$(DefaultItemExcludes);checks\**;dist\**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\CurvePanelVRDemo\VrPanelContract.cs" Link="VrPanelContract.cs" />
+    <Compile Remove="UnityCheck\**\*.cs" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+    <Content Include="Shaders\**\*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="demo-osc.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="README.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="..\CurvePanelVRDemo\README.md" Link="VR-DEMO.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="THIRD-PARTY.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="licenses\**\*" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="UnityCheck\**\*" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+  </ItemGroup>
+</Project>

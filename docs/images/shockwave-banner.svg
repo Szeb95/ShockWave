@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="260" viewBox="0 0 1200 260" role="img" aria-labelledby="title desc">
+  <title id="title">ShockWave</title>
+  <desc id="desc">Desktop and VRChat toy controls on a dark background with a green waveform.</desc>
+  <rect width="1200" height="260" rx="24" fill="#17191d"/>
+  <circle cx="1080" cy="125" r="158" fill="#1e2829"/>
+  <path d="M 680 136 H 739 L 762 110 L 789 169 L 826 57 L 864 204 L 900 102 L 925 136 H 1160" fill="none" stroke="#12b895" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="64" y="134" fill="#f3f4f6" font-family="Segoe UI,Arial,sans-serif" font-size="70" font-weight="700">ShockWave</text>
+  <text x="68" y="183" fill="#b9bdc7" font-family="Segoe UI,Arial,sans-serif" font-size="23">Desktop and VRChat toy controls</text>
+</svg>

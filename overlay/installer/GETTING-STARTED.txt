@@ -1,0 +1,14 @@
+ShockWave - getting started
+
+1. Open ShockWave from the Start menu. A desktop shortcut is optional during setup.
+2. Test mode defaults off. A fresh installation has no account token or configured shocker UUIDs. Existing saved settings are retained on update. Enable Settings > Debug > Test mode for a preview without toy output.
+3. For Bluetooth toys, turn on Bluetooth in Windows and turn on the toys. Use Scan toys if needed. While scanning, connected toys can appear green but output/Input is paused. Press Stop scanning before using Input. Stop scanning also pauses automatic discovery until the next Scan toys or Reset Bluetooth.
+4. Motors/functions have separate cards. Input is the requested level, Sensitivity scales it, and Max % limits the result. Test mode previews without activating hardware.
+5. For OpenShock, enter your own account token and shocker details in Settings, then Start bridge. For VRChat, enable OSC and use the matching avatar controls. Bluetooth desktop control does not require VRChat, Unity, Lovense Remote or Intiface.
+
+Guides are in the docs folder. The optional finished avatar tool is in Avatar-tools; read its README before manually importing it. VRChat Avatar SDK and VRCFury are prerequisites for that tool.
+
+Updating: close the installed app normally, then run a newer setup. Saved settings are retained.
+Removing: Windows Settings > Apps > Installed apps > ShockWave > Uninstall, or Start menu > ShockWave > Uninstall ShockWave. Program files, installed Bluetooth library and shortcuts are removed. Personal settings and tokens remain in %LOCALAPPDATA%\SzebsToys for a later reinstall. No Unity project is changed.
+
+The setup is not digitally signed. Windows may show an unknown-publisher/SmartScreen prompt.

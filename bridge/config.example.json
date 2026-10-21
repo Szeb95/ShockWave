@@ -1,0 +1,38 @@
+{
+  "apiBaseUrl": "https://api.openshock.app",
+  "dryRun": false,
+  "selfTestEnabled": false,
+  "selfTestShockerKeys": [],
+  "selfTestAvatarGroup": "PiCtrl",
+  "pollIntervalMs": 2000,
+  "shockers": [
+    {
+      "key": "legacy-shocker",
+      "name": "My shocker",
+      "model": "",
+      "uuid": "",
+      "paused": false,
+      "minIntensity": 0,
+      "maxIntensity": 100,
+      "minDurationMs": 300,
+      "maxDurationMs": 15000,
+      "cooldownMs": 1000,
+      "durationInputMax": 100,
+      "durationAtInputMaxMs": 15000,
+      "avatarGroup": "PiCtrl"
+    }
+  ],
+  "osc": {
+    "listenHost": "127.0.0.1",
+    "listenPort": 9001,
+    "sendHost": "127.0.0.1",
+    "sendPort": 9000,
+    "intensityAddress": "/avatar/parameters/PiCtrl_Intensity",
+    "durationAddress": "/avatar/parameters/PiCtrl_Duration",
+    "actionAddress": "/avatar/parameters/PiCtrl_Action",
+    "feedbackEventAddress": "/avatar/parameters/PiCtrl_FeedbackEvent",
+    "feedbackActiveAddress": "/avatar/parameters/PiCtrl_FeedbackActive",
+    "feedbackIntensityAddress": "/avatar/parameters/PiCtrl_FeedbackIntensity",
+    "feedbackModeAddress": "/avatar/parameters/PiCtrl_FeedbackMode"
+  }
+}

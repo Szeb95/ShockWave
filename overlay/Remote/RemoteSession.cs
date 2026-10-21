@@ -1,0 +1,192 @@
+using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using ShockWave.Overlay.Toys;
+
+namespace ShockWave.Overlay;
+
+// Owned by the UI thread. Hardware lease expiry remains in LocalToyController,
+// independent of this thread, the helper, and the network worker.
+internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<LocalToyController?> controller,
+    Func<BridgeConfig> config, Action<string, string, int, int, long> shock) : IDisposable
+{
+    internal static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
+    private sealed record Alias(string Device, string Function, LocalToyController Controller);
+    private sealed record OwnedLease(ToyInputLease Lease, LocalToyController Controller, long Claim);
+    private readonly Dictionary<(string, string), string> aliases = [];
+    private readonly Dictionary<(string, string), Alias> targets = [];
+    private readonly Dictionary<string, string> shockTargets = [];
+    private readonly Dictionary<(string, string), OwnedLease> leases = [];
+    private readonly Dictionary<(string, string), long> claims = [];
+    private readonly HashSet<string> shockIds = [];
+    private readonly Guid source = Guid.NewGuid();
+    private RemoteWorker? worker;
+    private string session = "", lastInventory = "";
+    private long heartbeatAt, inventoryAt, stateAt;
+    private bool lastTestMode;
+    public RemoteToyController Toys { get; } = new(() => config().DryRun);
+    public RemoteShockerInfo[] Shockers { get; private set; } = [];
+    public bool Enabled { get; private set; }
+    public bool Connected { get; private set; }
+    public string SessionId => session;
+    public string Invitation { get; private set; } = "";
+    public string Status { get; private set; } = "Disconnected · Connect is off";
+    public double RoundTripMs { get; private set; }
+    public event Action? Changed, Paired;
+    internal event Action<string>? Diagnostic;
+    public void Connect(string code, string node, string directory)
+    {
+        EndSession();
+        try
+        {
+            worker ??= new(node, directory); Enabled = true;
+            worker.Send(new { kind = "enable", code }); Status = "Connecting · direct app-to-app · TURN disabled";
+        }
+        catch (Exception e) when (e is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
+        { Enabled = false; Status = "Connection helper could not start. Use the complete ShockWave folder."; worker?.Dispose(); worker = null; }
+        Changed?.Invoke();
+    }
+    public void Disconnect()
+    { Enabled = false; worker?.Send(new { kind = "disable" }); EndSession(); Status = "Disconnected · Connect is off"; Changed?.Invoke(); }
+    private void EndSession()
+    {
+        foreach (var lease in leases.Values) lease.Controller.EndInput(lease.Lease);
+        leases.Clear(); claims.Clear(); targets.Clear(); shockTargets.Clear(); aliases.Clear(); shockIds.Clear();
+        Toys.Disconnect(); Shockers = []; Connected = false; session = lastInventory = "";
+    }
+    private void Send(string type, object payload) => worker?.Send(new { kind = "send", type, payload, createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+    public void Tick()
+    {
+        if (worker is null) return;
+        if (worker.Failed) { Disconnect(); worker.Dispose(); worker = null; Status = "Connection helper stopped · use Connect to try again"; Changed?.Invoke(); return; }
+        var now = Environment.TickCount64;
+        if (now - heartbeatAt >= 250) { heartbeatAt = now; worker.Send(new { kind = "heartbeat" }); }
+        foreach (var item in worker.Drain())
+        {
+            try
+            {
+                switch (item.GetProperty("kind").GetString())
+                {
+                    case "diagnostic": Diagnostic?.Invoke(item.GetRawText()); break;
+                    case "invitation": Invitation = item.GetProperty("code").GetString() ?? ""; Changed?.Invoke(); break;
+                    case "status": if (!Connected) { Status = item.GetProperty("detail").GetString() ?? "Waiting"; Changed?.Invoke(); } break;
+                    case "error": Enabled = false; EndSession(); Status = item.GetProperty("detail").GetString() ?? "Connection failed"; Changed?.Invoke(); break;
+                    case "connected":
+                        if (!Enabled) break; EndSession(); Connected = true; session = item.GetProperty("session").GetString()!;
+                        Status = "Connected · encrypted direct app-to-app · TURN disabled"; inventoryAt = 0; lastTestMode = config().DryRun;
+                        Paired?.Invoke(); Changed?.Invoke(); break;
+                    case "disconnected":
+                        var detail = item.TryGetProperty("detail", out var reason) ? reason.GetString() : "Peer disconnected";
+                        EndSession(); Status = Enabled ? detail + " · Connect is on · retrying direct" : "Disconnected · Connect is off"; Changed?.Invoke(); break;
+                    case "timing": RoundTripMs = item.GetProperty("milliseconds").GetDouble(); break;
+                    case "message":
+                        var message = item.GetProperty("message");
+                        if (!Connected || message.GetProperty("session").GetString() != session) break;
+                        var elapsed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - item.GetProperty("receivedAt").GetInt64();
+                        var type = message.GetProperty("kind").GetString();
+                        if (elapsed < -10 || elapsed > (type is "state" or "shock" ? item.GetProperty("remainingMs").GetDouble() : 3000)) break;
+                        Receive(type!, message.GetProperty("payload"), Math.Clamp(item.GetProperty("remainingMs").GetDouble() - Math.Max(0, elapsed), 1, 250)); break;
+                }
+            }
+            catch (Exception e) when (e is JsonException or InvalidOperationException or KeyNotFoundException or FormatException or ArgumentException or OverflowException)
+            { Disconnect(); Status = "Invalid remote data · disconnected"; Changed?.Invoke(); }
+        }
+        if (!Connected) return;
+        if (lastTestMode != config().DryRun) { lastTestMode = config().DryRun; Toys.Stop(); foreach (var l in leases.Values) l.Controller.EndInput(l.Lease); leases.Clear(); }
+        if (now - inventoryAt >= 500) { inventoryAt = now; PublishInventory(); }
+        if (now - stateAt >= 33) { stateAt = now; Send("state", Toys.Levels()); }
+    }
+    private string AliasFor(string device, string function) => aliases.TryGetValue((device, function), out var id) ? id : aliases[(device, function)] = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant();
+    internal RemoteInventory PublishInventory()
+    {
+        targets.Clear(); shockTargets.Clear();
+        var local = controller(); var toys = new List<RemoteToyInfo>();
+        if (local is not null)
+        foreach (var device in (inventory()?.Devices ?? []).Where(d => d.ConnectionState == ToyConnectionState.Connected && d.CapabilitiesKnown).Take(32))
+        {
+            var id = AliasFor(device.DeviceKey, ""); var functions = new List<RemoteToyFunction>();
+            foreach (var f in device.Capabilities.Where(f => !f.IsSetting && f.Type != ToyCapabilityType.Unknown && f.NativeMaximum is > 0).Take(8))
+            {
+                var channel = AliasFor(device.DeviceKey, f.ChannelId); targets[(id, channel)] = new(device.DeviceKey, f.ChannelId, local);
+                functions.Add(new(channel, Clean(f.DisplayName), f.Type.ToString(), local.State(device.DeviceKey, f.ChannelId).Preference.Maximum));
+            }
+            if (functions.Count > 0) toys.Add(new(id, Clean(device.DisplayName), device.BatteryPercent, functions.ToArray()));
+        }
+        var shocks = config().ActiveShockers.Where(s => !s.Paused && s.Uuid.Length > 0).Take(32).Select(s =>
+        {
+            var id = AliasFor("shock/" + s.Key, ""); shockTargets[id] = s.Key;
+            return new RemoteShockerInfo(id, Clean(s.Name), config().Provider, s.MaxIntensity, Math.Min(15000, s.MaxDurationMs));
+        }).ToArray();
+        foreach (var key in leases.Keys.Where(k => !targets.ContainsKey(k)).ToArray()) End(key);
+        var next = new RemoteInventory(toys.ToArray(), shocks); var text = JsonSerializer.Serialize(next, Json);
+        if (text != lastInventory) { lastInventory = text; Send("inventory", next); }
+        return next;
+    }
+    internal void Receive(string type, JsonElement payload, double remainingMs = 250)
+    {
+        if (type == "inventory")
+        {
+            var data = payload.Deserialize<RemoteInventory>(Json) ?? throw new JsonException();
+            if (data.Toys is null || data.Shockers is null || data.Toys.Any(t => t is null) || data.Shockers.Any(s => s is null) || data.Toys.Length > 32 || data.Shockers.Length > 32 || data.Toys.Sum(t => t.Functions?.Length ?? 1000) > 256) throw new JsonException();
+            var ids = new HashSet<string>();
+            foreach (var toy in data.Toys)
+            {
+                if (!Id(toy.Id) || !ids.Add(toy.Id) || !Text(toy.Name) || toy.Battery is < 0 or > 100 || toy.Functions is null || toy.Functions.Length is < 1 or > 8) throw new JsonException();
+                var functions = new HashSet<string>();
+                foreach (var f in toy.Functions) if (f is null || !Id(f.Id) || !functions.Add(f.Id) || !Text(f.Name) || !Enum.TryParse<ToyCapabilityType>(f.Type, out var ft) || !Enum.IsDefined(ft) || ft is ToyCapabilityType.Unknown or ToyCapabilityType.Depth or ToyCapabilityType.Position || f.Maximum is < 0 or > 100) throw new JsonException();
+            }
+            foreach (var s in data.Shockers) if (!Id(s.Id) || !ids.Add(s.Id) || !Text(s.Name) || s.Service is not ("OpenShock" or "PiShock") || s.Maximum is < 0 or > 100 || s.DurationMs is < 1 or > 15000) throw new JsonException();
+            Toys.Replace(data.Toys); Shockers = data.Shockers; Changed?.Invoke();
+        }
+        else if (type == "state")
+        {
+            var values = payload.Deserialize<RemoteLevel[]>(Json) ?? throw new JsonException();
+            if (values.Length > 256 || values.Any(v => v is null || !Id(v.Device) || !Id(v.Channel) || v.Percent is < 0 or > 100 || v.Claim < 1) || values.Select(v => (v.Device, v.Channel)).Distinct().Count() != values.Length) throw new JsonException();
+            if (values.Any(v => !targets.ContainsKey((v.Device, v.Channel)))) return; // Atomic rejection; no guessed targets.
+            var present = values.Select(v => (v.Device, v.Channel)).ToHashSet();
+            foreach (var key in leases.Keys.Where(k => !present.Contains(k)).ToArray()) End(key);
+            foreach (var value in values)
+            {
+                var key = (value.Device, value.Channel); var target = targets[key]; var life = TimeSpan.FromMilliseconds(remainingMs);
+                try
+                {
+                    if (leases.TryGetValue(key, out var existing) && existing.Claim == value.Claim)
+                    {
+                        if (!ReferenceEquals(existing.Controller, target.Controller) || !target.Controller.UpdateInput(existing.Lease, value.Percent, life)) { End(key); Reject(value); }
+                    }
+                    else if (value.Claim > claims.GetValueOrDefault(key))
+                    {
+                        End(key); claims[key] = value.Claim;
+                        leases[key] = new(target.Controller.BeginInput(target.Device, target.Function, source, value.Percent, life), target.Controller, value.Claim);
+                    }
+                    else Reject(value);
+                }
+                catch (InvalidOperationException) { claims[key] = Math.Max(claims.GetValueOrDefault(key), value.Claim); End(key); Reject(value); }
+            }
+        }
+        else if (type == "stop") { foreach (var key in leases.Keys.ToArray()) End(key); }
+        else if (type == "result")
+        {
+            var value = payload.Deserialize<RemoteLevel>(Json); if (value is not null) Toys.Reject(value.Device, value.Channel, value.Claim);
+        }
+        else if (type == "shock")
+        {
+            var id = payload.GetProperty("commandId").GetString()!; var target = payload.GetProperty("device").GetString()!;
+            var mode = payload.GetProperty("type").GetString()!; var intensity = payload.GetProperty("percent").GetInt32(); var duration = payload.GetProperty("durationMs").GetInt32();
+            if (!Id(id) || !Id(target) || mode is not ("Shock" or "Vibrate" or "Sound") || intensity is < 1 or > 100 || duration is < 1 or > 15000 || !shockTargets.TryGetValue(target, out var key) || shockIds.Contains(id)) return;
+            if (shockIds.Count >= 4096) { Disconnect(); return; } shockIds.Add(id);
+            shock(key, mode, intensity, duration, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)remainingMs); // One submission, never retried or replayed.
+        }
+    }
+    internal bool SendShock(string id, string type, int percent, int durationMs)
+    {
+        if (!Connected || config().DryRun || !Shockers.Any(s => s.Id == id) || type is not ("Shock" or "Vibrate" or "Sound") || percent is < 1 or > 100 || durationMs is < 1 or > 15000) return false;
+        Send("shock", new { commandId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(), device = id, type, percent, durationMs }); return true;
+    }
+    private void Reject(RemoteLevel value) => Send("result", value);
+    private void End((string, string) key) { if (leases.Remove(key, out var lease)) lease.Controller.EndInput(lease.Lease); }
+    private static bool Id(string? value) => value is not null && Regex.IsMatch(value, "^[a-f0-9]{32}$", RegexOptions.CultureInvariant);
+    private static bool Text(string? value) => value is { Length: > 0 and <= 96 } && !value.Any(char.IsControl);
+    private static string Clean(string value) => new(value.Where(c => !char.IsControl(c)).Take(96).ToArray());
+    public void Dispose() { Disconnect(); worker?.Dispose(); worker = null; }
+}

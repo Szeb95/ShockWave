@@ -1,0 +1,15 @@
+<Project>
+  <PropertyGroup><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
+  <ItemGroup>
+    <!-- Share the verified RAM pattern engine, numeric feedback and renderer; never the test GUI or demo listener. -->
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/ShaderPanelTest/PanelModel.cs" Link="ToyControl/PanelModel.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/ShaderPanelTest/PatternPlayback.cs" Link="ToyControl/PatternPlayback.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/ShaderPanelTest/VrFeedback.cs" Link="ToyControl/VrFeedback.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/ShaderPanelTest/Osc.cs" Link="ToyControl/Osc.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/ShaderPanelTest/GpuRenderer.cs" Link="ToyControl/GpuRenderer.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/CurvePanelVRDemo/VrPanelContract.cs" Link="ToyControl/FeedbackPacking.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)../../work/ToyControlEditor/ToyControlContract.cs" Link="ToyControl/ToyControlContract.cs" />
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.D3DCompiler" Version="3.8.3" />
+  </ItemGroup>
+</Project>

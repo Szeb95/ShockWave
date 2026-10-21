@@ -1,0 +1,64 @@
+# ShockWave Source-Available Contribution License 1.0
+
+Effective date: **2026-10-21**.
+
+Copyright (c) 2026 Szeb95 and contributors.
+
+Project maintainer: **Szeb95**. Official repository location: **https://github.com/Szeb95/ShockWave**.
+
+---
+
+## 1. Scope and ownership
+
+"ShockWave" means the original source code, documentation and other original project materials to which the maintainer applies this license. Third-party components and contributions with separate applicable notices are addressed in section 6.
+
+The copyright holders retain ownership of their respective work. All rights are reserved except for the permissions expressly granted below, separately agreed in writing, or provided by applicable law or the hosting platform's terms.
+
+This is a source-available license with limited contribution permissions. It is not an open-source license under the Open Source Definition.
+
+## 2. Permitted use
+
+Subject to these terms, you may:
+
+- View, download and inspect ShockWave's source.
+- Build and run an unmodified copy of ShockWave for your own use, and download and run the maintainer's official releases for your own use.
+- Modify, build and test ShockWave for the purpose of developing and submitting bug fixes, regression tests or documentation corrections to the official project.
+- Use a contribution branch or fork and submit the changes as a pull request or patch to the official project. Source changes may be displayed in that contribution workflow. This permission does not authorize publishing downloadable compiled versions, installers or other independent distributions.
+
+Retain applicable copyright notices, this license and third-party notices in permitted copies. Identify your contribution branch or fork as unofficial and created to propose fixes; do not imply maintainer endorsement.
+
+## 3. Reserved permissions
+
+Without separate written permission from the relevant copyright holders, this license does not authorize:
+
+- Publishing or distributing modified ShockWave executables, installers, downloadable packages or other independent releases.
+- Publishing, selling or distributing ShockWave source or binaries outside the contribution workflow permitted in section 2, including as a separate product or a rebranded version.
+- Copying or adapting ShockWave code into unrelated programs, libraries or services.
+- Sublicensing the project materials or granting other people rights beyond this license.
+
+You may link people to the official repository and official downloads. No permission to use project names, logos or other marks to suggest official status or endorsement is granted.
+
+## 4. Contributions
+
+Submit only work you have the right to contribute, and identify any third-party material and its applicable license.
+
+By intentionally submitting a fix, test or documentation correction to the official ShockWave project for inclusion, you grant Szeb95 and maintainers authorized by Szeb95 a nonexclusive, worldwide, royalty-free copyright license to use, reproduce, modify and distribute that contribution as part of the official ShockWave project, in source and compiled form, under these terms. This grant does not authorize use of your contribution in unrelated projects or require you to assign your copyright.
+
+Contributors retain ownership of their original contributions. This license does not restrict their independent use of material they own, apart from any ShockWave material incorporated into it. A submission does not oblige the maintainer to accept it.
+
+## 5. Hosting-platform and statutory rights
+
+Nothing in this license limits rights you independently hold under applicable law, or rights the project owner has granted to GitHub and its users under GitHub's Terms of Service. In particular, public-repository viewing and forking through GitHub remain subject to those terms.
+
+The restrictions above describe permissions granted by this project license. They do not purport to revoke hosting-platform rights or permissions granted by other copyright holders under their own licenses.
+
+## 6. Third-party components
+
+Third-party components remain governed by their respective licenses. This license does not replace those licenses, narrow their permissions or grant additional rights to vendor SDKs, libraries, binaries or other third-party materials. Follow the applicable notices described in `THIRD-PARTY.md` and the components' own files.
+
+## 7. Warranty and liability
+
+To the extent permitted by applicable law, the software and project materials are provided "as is", without warranty. Use them at your own risk. No warranty is made that any device, network connection or stop request will function without failure.
+
+To the extent permitted by applicable law, the copyright holders and contributors are not liable for loss or damage arising from use of the software or project materials. Nothing in this section excludes or limits liability, warranties or other rights that cannot lawfully be excluded or limited.
+

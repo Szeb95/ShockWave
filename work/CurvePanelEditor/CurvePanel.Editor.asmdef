@@ -1,0 +1,9 @@
+{
+  "name": "ShockWave.CurvePanel.Editor",
+  "rootNamespace": "ShockWave.CurvePanel",
+  "references": ["VRC.SDK3A", "com.vrcfury.api"],
+  "includePlatforms": ["Editor"],
+  "autoReferenced": true,
+  "overrideReferences": false,
+  "noEngineReferences": false
+}

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Match the production Windows subsystem: worker pipes must work without a console. -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../overlay/Toys/*.cs" Link="Toys/%(Filename)%(Extension)" />
+    <Compile Include="../../overlay/LocalToysPage.cs" Link="LocalToysPage.cs" />
+    <Compile Include="../../overlay/ToyFunctionRow.cs" Link="ToyFunctionRow.cs" />
+    <Compile Include="../../overlay/PercentSlider.cs" Link="PercentSlider.cs" />
+    <Compile Include="../../overlay/SettingInputs.cs" Link="SettingInputs.cs" />
+    <Compile Include="../../overlay/ThemeControls.cs" Link="ThemeControls.cs" />
+    <Compile Include="../../overlay/BridgeConfig.cs" Link="BridgeConfig.cs" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,14 @@
+ShockWave for Windows 10/11 (64-bit)
+
+Setup includes the Windows app, its own .NET runtime, Node.js, the OpenShock/OSC bridge, rendering files and guides. No separate runtime installation is needed. No tokens, remembered devices or personal settings are included.
+
+The selected Bluetooth component downloads about 1 MB directly from Lovense. An Internet connection is needed for a first installation with Bluetooth. The download is checked against the official library version used by this build. Lovense's terms apply to that component:
+https://www.lovense.com/end-user-license-agreement
+Official library documentation:
+https://developer.lovense.com/docs/game-engine-plugins/windows_ble
+
+Optional Unity avatar tools are copied into the program's Avatar-tools folder. Import them into an avatar project yourself. Setup never opens or changes a Unity project. VRChat's Avatar SDK and VRCFury belong to your avatar project and are not installed by this setup.
+
+Close an installed copy normally before updating or uninstalling it. Setup does not forcibly stop running applications.
+
+Uninstall from Windows Settings > Apps > Installed apps > ShockWave, or use the Start menu uninstaller. Your saved settings and tokens are kept for a later reinstall.

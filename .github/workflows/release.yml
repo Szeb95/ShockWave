@@ -1,0 +1,57 @@
+name: Prepare Windows release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Numeric release version
+        required: true
+        default: '0.7.0'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      RELEASE_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Build a complete update package
+        run: |
+          ./overlay/package-release.ps1 -Version $env:RELEASE_VERSION
+      - name: Check updater fixtures and published package
+        run: |
+          $bridgeTests = @(Get-ChildItem -LiteralPath bridge -Filter '*.test.mjs' | ForEach-Object FullName)
+          node --test @bridgeTests
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge checks failed.' }
+          dotnet build tests/update/Update.Checks.csproj -c Release
+          if ($LASTEXITCODE -ne 0) { throw 'Update fixture build failed.' }
+          $checker = './tests/update/bin/Release/net8.0-windows/Update.Checks.exe'
+          & $checker
+          if ($LASTEXITCODE -ne 0) { throw 'Updater checks failed.' }
+          & $checker --inspect-package "./overlay/dist/ShockWave-$env:RELEASE_VERSION-win-x64.zip" $env:RELEASE_VERSION
+          if ($LASTEXITCODE -ne 0) { throw 'Published ZIP verification failed.' }
+      - name: Create a draft release for the owner to publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:RELEASE_VERSION -notmatch '^\d+\.\d+\.\d+(\.\d+)?$') { throw 'Invalid version.' }
+          gh release create "v$env:RELEASE_VERSION" "./overlay/dist/ShockWave-$env:RELEASE_VERSION-win-x64.zip" "./overlay/dist/ShockWave-$env:RELEASE_VERSION-win-x64.zip.sha256.txt" --draft --title "ShockWave $env:RELEASE_VERSION" --generate-notes --target $env:GITHUB_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'Creating the draft release failed.' }

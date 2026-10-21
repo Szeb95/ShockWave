@@ -1,0 +1,42 @@
+ShockWave Shader Lab - third-party notices
+
+Vortice.Windows (Direct3D11, D3DCompiler, DirectX, DXGI) 3.8.3
+Copyright (c) Amer Koleci and Contributors
+https://github.com/amerkoleci/Vortice.Windows
+
+Vortice.Mathematics 2.1.0
+Copyright (c) Amer Koleci and Contributors
+https://github.com/amerkoleci/Vortice.Mathematics
+
+SharpGen.Runtime and SharpGen.Runtime.COM 2.4.2-beta
+Copyright (c) 2010-2017 Alexandre Mutel, 2017-2023 Jeremy Koritzinsky,
+2023-2024 Amer Koleci
+https://github.com/SharpGenTools/SharpGenTools
+
+The above libraries use the MIT licence:
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+Bundled .NET libraries System.Text.Json, System.Text.Encodings.Web and
+System.IO.Pipelines 9.0.1: see licenses/DotNet-LICENSE.txt and
+licenses/DotNet-THIRD-PARTY-NOTICES.txt, copied from the distributed package.
+The machine's Windows/.NET Desktop runtime is not bundled.
+
+Exact dependency versions and content hashes are recorded in packages.lock.json
+in the source project.

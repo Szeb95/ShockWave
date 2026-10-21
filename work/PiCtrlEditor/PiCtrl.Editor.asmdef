@@ -1,0 +1,17 @@
+{
+  "name": "ShockWave.PiCtrl.Editor",
+  "rootNamespace": "ShockWave.PiCtrl",
+  "references": [
+    "VRC.SDK3A",
+    "com.vrcfury.api"
+  ],
+  "includePlatforms": ["Editor"],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

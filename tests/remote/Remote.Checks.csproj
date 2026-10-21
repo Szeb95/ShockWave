@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><AssemblyName>Remote.Checks</AssemblyName></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../../overlay/ShockWave.Overlay.csproj" /></ItemGroup>
+</Project>

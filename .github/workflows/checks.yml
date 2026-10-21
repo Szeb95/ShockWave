@@ -1,0 +1,57 @@
+name: Source checks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: source-checks-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows build and fixture checks
+    runs-on: windows-2022
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Set up .NET 8 SDK
+        uses: actions/setup-dotnet@v6.0.0
+        with:
+          dotnet-version: '8.0.x'
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: '24.21.0'
+          package-manager-cache: false
+      - name: Restore locked bridge dependencies
+        working-directory: bridge
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
+      - name: Check bridge with fixtures and loopback peers
+        run: |
+          $bridgeTests = @(Get-ChildItem -LiteralPath bridge -Filter '*.test.mjs' | ForEach-Object FullName)
+          node --test @bridgeTests
+          if ($LASTEXITCODE -ne 0) { throw 'Bridge checks failed.' }
+      - name: Build Windows app without launching it
+        run: |
+          dotnet build overlay/ShockWave.Overlay.csproj --configuration Release -p:IncludeLegacyLovense=false
+          if ($LASTEXITCODE -ne 0) { throw 'Windows build failed.' }
+      - name: Check update validation, rollback and interface with fixtures
+        run: |
+          dotnet build tests/update/Update.Checks.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'Update fixture build failed.' }
+          ./tests/update/bin/Release/net8.0-windows/Update.Checks.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Update checks failed.' }

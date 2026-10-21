@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>ShockWave</AssemblyName>
+    <Version>0.7.0</Version>
+    <RootNamespace>ShockWave.Overlay</RootNamespace>
+    <Product>ShockWave</Product>
+    <Title>ShockWave</Title>
+    <Description>Windows toy controls with VRChat OSC and OpenShock integration</Description>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>false</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <DebugType>none</DebugType>
+    <!-- Installer payloads can contain optional Unity source; never compile published copies. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);dist/**</DefaultItemExcludes>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="../LICENSE" Link="LICENSE" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../THIRD-PARTY.md" Link="THIRD-PARTY.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/UPDATES.md" Link="UPDATES.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="ToyControl/Shaders/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../work/ToyControlEditor/README.md" Link="TOY-CONTROL.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/lovense-remote/SPS.md" Link="SPS.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/PISHOCK.md" Link="PISHOCK.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/REMOTE.md" Link="REMOTE.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../work/ShaderPanelTest/THIRD-PARTY.txt" Link="ToyControl/THIRD-PARTY.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../work/ShaderPanelTest/licenses/**/*" Link="ToyControl/licenses/%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <!-- The active form is OverlayForm.Shell.cs; ignore a stale shared-workspace copy at the old path. -->
+    <Compile Remove="OverlayForm.cs" />
+    <Content Include="native\lovense\*.dll" Condition="'$(IncludeLegacyLovense)' != 'false'" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="native/buttplug/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="..\bridge\bridge.mjs" Link="bridge\bridge.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\pishock.mjs" Link="bridge\pishock.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\remote-peer.mjs" Link="bridge\remote-peer.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\remote-worker.mjs" Link="bridge\remote-worker.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\capture.mjs" Link="bridge\capture.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\live-logs.mjs" Link="bridge\live-logs.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\share-limits.mjs" Link="bridge\share-limits.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\shocker-names.mjs" Link="bridge\shocker-names.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\package.json" Link="bridge\package.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\node_modules\**\*" Exclude="..\bridge\node_modules\**\*.map;..\bridge\node_modules\**\*.ts;..\bridge\node_modules\.package-lock.json" Link="bridge\node_modules\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\osc.mjs" Link="bridge\osc.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\config.example.json" Link="bridge\config.example.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+  <Import Project="ToyControl/ToyControl.Shared.props" />
+</Project>

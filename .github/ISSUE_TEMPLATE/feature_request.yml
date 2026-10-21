@@ -1,0 +1,22 @@
+name: Feature request
+description: Suggest a focused improvement.
+title: "[Feature] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What would you like to do?
+      description: Describe the situation and the improvement it would make.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Suggested behavior
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Examples or alternatives
+      description: Keep account credentials, connection codes and private identifiers out of examples.

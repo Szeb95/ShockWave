@@ -1,0 +1,9 @@
+Optional Unity avatar tool
+
+The Assets folder beside this README contains the finished ShockWave Toy Control editor tool and its shader source. Copy/import Assets/Editor/SzebsToysToyControl into your avatar project's Assets/Editor folder yourself.
+
+Prerequisites: a Unity VRChat avatar project with the VRChat Avatar SDK and VRCFury already installed. These packages and Unity/VRChat are not distributed by the Windows installer.
+
+Select your avatar, open Tools > ShockWave > Toy Control > Add to Avatar, and use Add/Update yourself. Existing avatars/scenes are not changed merely by running Windows setup. The tool generates its own content under Assets/SzebsToys/ToyControl. Save/build/upload your avatar yourself.
+
+Read docs/TOY-CONTROL.md in the Windows app folder for controls, limits and current verification. SPS uses compatible contacts in your existing avatar; see docs/SPS.md. OpenShock's existing PiCtrl avatar controls are separate from this finished Toy Control tool.
