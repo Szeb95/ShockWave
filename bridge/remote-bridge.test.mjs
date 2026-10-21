@@ -22,7 +22,8 @@ test('remote bridge IPC requires current session and expiry, applies other-contr
     send({ ...request, expiresAt: Date.now() + 200 });
     send({ kind: 'remoteGate', session });
     send({ ...request, session: 'b'.repeat(64), expiresAt: Date.now() + 200 });
-    send({ ...request, expiresAt: Date.now() - 1 });
+    // This crosses a process boundary: avoid a one-millisecond clock-resolution race on Windows.
+    send({ ...request, expiresAt: Date.now() - 1000 });
     send({ ...request, expiresAt: Date.now() + 200 });
     await wait(() => output.includes('TEST ONLY:'));
     send({ kind: 'remoteGate', session: '' }); send({ ...request, expiresAt: Date.now() + 200 });
