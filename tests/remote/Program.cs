@@ -3,6 +3,7 @@ using System.Reflection;
 using System.Text.Json;
 using ShockWave.Overlay;
 using ShockWave.Overlay.Toys;
+using ShockWave.Overlay.Sps;
 
 internal static class Program
 {
@@ -14,7 +15,7 @@ internal static class Program
         Application.EnableVisualStyles();
         try
         {
-            Receiver(); Inventory(); Panel();
+            Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); Panel();
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
             File.WriteAllText(Path.Combine(artifacts, "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
@@ -60,6 +61,22 @@ internal static class Program
         Check(f.Adapter.Writes.Count == writes, "receiver Test mode blocks physical submissions");
         r.Disconnect(); Check(c.State("fixture","v1").RequestedPercent == 0, "disconnect clears incoming activity");
     }
+    private static void LiveGestureReplacement()
+    {
+        using var f=new Fixture(); var inventory=f.Session.PublishInventory(); var toy=inventory.Toys.Single();
+        var frame=new RemoteLevel(toy.Id,toy.Functions[0].Id,60,1);
+        f.Session.Receive("state",Element(new[]{frame}));
+        Wait(()=>{f.Session.Receive("state",Element(new[]{frame}));return f.Controller.State("fixture","v1").SentPercent>0;},"initial remote drawing reaches the simulated motor");
+        f.Adapter.BlockZero=true;
+        try
+        {
+            frame=frame with {Claim=2,Percent=80}; f.Session.Receive("state",Element(new[]{frame}));
+            Check(f.Controller.State("fixture","v1").RequestedPercent==80,
+                "consecutive remote drawing does not stop and reject itself while a slow motor zero is pending");
+            Check(!f.Adapter.ZeroEntered.IsSet,"replacing a live remote gesture introduces no unnecessary motor stop");
+        }
+        finally { f.Adapter.BlockZero=false; f.Adapter.AllowZero.Set(); }
+    }
     private static void Inventory()
     {
         using var f = new Fixture(); var r = f.Session;
@@ -95,6 +112,76 @@ internal static class Program
             bool rejected=false; try { r.Receive("state",doc.RootElement); } catch(JsonException) { rejected=true; }
             Check(rejected,"null state elements are rejected before output");
         }
+    }
+    private static void SpsHandoff()
+    {
+        using var receiver = new Fixture(); using var sender = new Fixture();
+        using var sps = new SpsSession(() => receiver.Adapter.Snapshot, () => receiver.Controller);
+        const string address = "/avatar/parameters/OGB/Pen/Fixture/TouchOthers";
+        var now = ToyOscRouter.Clock;
+        sps.Configure([new SpsRule { Address=address, Targets=[new("fixture","v1")] }], now);
+        sps.Tick(now, true);
+        void Contact(float level)
+        {
+            Thread.Sleep(2); now = ToyOscRouter.Clock;
+            sps.Apply(new(address, [level]), now); sps.Tick(now, true);
+        }
+        Contact(.6f);
+        var advertised = receiver.Session.PublishInventory();
+        sender.Session.Toys.Replace(advertised.Toys);
+        using var graph = new ToyControlSession(() => null, () => null) { Remote=sender.Session.Toys };
+        graph.Tick(ToyOscRouter.Clock); graph.Action("InRow0", false); graph.Draw(new(600,300), false, true); graph.Tick(ToyOscRouter.Clock);
+        var frame = sender.Session.Toys.Levels().Single();
+        receiver.Session.Receive("state", Element(new[] { frame }));
+        var remoteSource = receiver.Controller.State("fixture","v1").InputSource;
+        Contact(0); Contact(.9f);
+        Check(receiver.Controller.State("fixture","v1").InputSource == remoteSource && receiver.Controller.State("fixture","v1").RequestedPercent == frame.Percent,
+            "fresh SPS zero/rise cannot steal a function from an active remote drawing");
+        receiver.Session.Receive("state", Element(new[] { frame with { Percent=42 } }));
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent == 42 && graph.Model.Functions.Single(f=>f.Function.Id==frame.Channel).Selected,
+            "remote control remains selected and renewable while the owner's SPS stays enabled");
+        receiver.Session.Receive("state", Element(Array.Empty<RemoteLevel>()));
+        sps.Tick(ToyOscRouter.Clock, true);
+        Check(sps.ActiveTargets == 0, "remote release does not replay a cached positive SPS contact");
+        Wait(() => !receiver.Controller.State("fixture","v1").Stopping, "remote handoff zero completes");
+        Contact(.4f);
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent == 40 && sps.ActiveTargets == 1,
+            "a fresh SPS contact resumes after remote release without reconnecting or changing assignments");
+        frame = frame with { Claim=frame.Claim+1, Percent=0 };
+        receiver.Session.Receive("state", Element(new[] { frame }));
+        Contact(.8f);
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent == 0 && sps.ActiveTargets == 0,
+            "a remote curve's live zero keeps ownership instead of letting SPS steal the next rise");
+        receiver.Session.Receive("state", Element(new[] { frame with { Percent=55 } }));
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent == 55,
+            "the same remote curve can rise again after zero while SPS remains enabled");
+        frame = frame with { Claim=frame.Claim+1, Percent=61 };
+        receiver.Session.Receive("state",Element(new[] {frame}));
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent==61,
+            "a fresh drawing replaces the same live remote source without stopping and rejecting itself");
+        receiver.Session.Receive("state",Element(new[] {frame with {Claim=frame.Claim-1,Percent=99}}));
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent==61,"late activity from the previous drawing cannot replace a newer remote gesture");
+        receiver.Session.Receive("state", Element(Array.Empty<RemoteLevel>()));
+        sps.Tick(ToyOscRouter.Clock,true); Wait(() => !receiver.Controller.State("fixture","v1").Stopping, "second remote zero completes"); Contact(.4f);
+        frame = frame with { Claim=frame.Claim+1, Percent=35 };
+        receiver.Session.Receive("state",Element(new[] {frame}));
+        receiver.Session.Receive("state",Element(Array.Empty<RemoteLevel>()));
+        sps.Tick(ToyOscRouter.Clock,true);
+        Check(sps.ActiveTargets==0,"a complete remote claim/release between SPS ticks cannot replay cached input");
+        Wait(()=>!receiver.Controller.State("fixture","v1").Stopping,"short remote handoff zero completes"); Contact(.5f);
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent==50,"SPS recovers from a remote handoff it did not observe while active");
+        frame = frame with { Claim=frame.Claim+1, Percent=65 };
+        receiver.Session.Receive("state",Element(new[] {frame})); sps.Tick(ToyOscRouter.Clock,true); Contact(0);
+        receiver.Controller.Stop();
+        Wait(()=>!receiver.Controller.State("fixture","v1").Stopping,"owner Stop during remote handoff completes");
+        frame = frame with {Claim=frame.Claim+1};
+        receiver.Session.Receive("state",Element(new[] {frame}));
+        receiver.Session.Receive("state",Element(Array.Empty<RemoteLevel>()));
+        sps.Tick(ToyOscRouter.Clock,true); Contact(.9f);
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent==0 && sps.ActiveTargets==0,
+            "owner Stop cannot be hidden by later remote claim/release or a pre-Stop neutral contact");
+        Contact(0); Wait(()=>!receiver.Controller.State("fixture","v1").Stopping,"owner Stop rearm zero completes"); Contact(.3f);
+        Check(receiver.Controller.State("fixture","v1").RequestedPercent==30,"a new neutral and rise still rearm SPS after an explicit owner Stop");
     }
     private static void Panel()
     {
@@ -155,6 +242,7 @@ internal static class Program
         },"remote UI state reaches actual receiver gate",6000);
         Check(outgoing.Length==4 && reverse.Length==4,"four toys work simultaneously in both directions through simulated receiver gates");
         Check(a.Session.PublishInventory().Toys.Length==4,"remote inventory is never forwarded as locally owned toys");
+        ContinuousSps(a,b);
         b.Session.Disconnect();
         Wait(() => { a.Session.Tick(); return !a.Session.Connected && b.Controller.State("fixture","v1").RequestedPercent==0; },"disconnect revokes both session directions",5000);
         Check(a.Session.Toys.Snapshot.Devices.Count==0,"either side disconnect clears peer inventory and incoming output");
@@ -163,6 +251,45 @@ internal static class Program
         catch { Console.WriteLine("A status: " + a.Session.Status + "; B status: " + b.Session.Status); throw; }
         Check(a.Session.Toys.Snapshot.Devices[0].DeviceKey!=oldId && a.Session.Toys.Levels().Length==0 && b.Adapter.Snapshot.Devices.All(t=>b.Controller.State(t.DeviceKey,"v1").RequestedPercent==0),
             "reconnect automatically restores devices with fresh aliases and no old levels or loops");
+    }
+    private static void ContinuousSps(Fixture a, Fixture b)
+    {
+        const string contact="/avatar/parameters/OGB/Pen/Fixture/TouchOthers";
+        using var aSps=new SpsSession(()=>a.Adapter.Snapshot,()=>a.Controller);
+        using var bSps=new SpsSession(()=>b.Adapter.Snapshot,()=>b.Controller);
+        SpsRule Mapping(Fixture owner)=>new() {Address=contact,Targets=owner.Adapter.Snapshot.Devices.SelectMany(d=>d.Capabilities.Select(c=>new SpsTarget(d.DeviceKey,c.ChannelId))).ToList()};
+        aSps.Configure([Mapping(a)],ToyOscRouter.Clock); bSps.Configure([Mapping(b)],ToyOscRouter.Clock);
+        using var aGraph=new ToyControlSession(()=>null,()=>null) {Remote=a.Session.Toys};
+        using var bGraph=new ToyControlSession(()=>null,()=>null) {Remote=b.Session.Toys};
+        aGraph.Tick(ToyOscRouter.Clock); bGraph.Tick(ToyOscRouter.Clock);
+        foreach(var row in aGraph.Model.Functions.Where(f=>f.Function.Name=="Vibration")) row.Function.Selected=true;
+        foreach(var row in bGraph.Model.Functions.Where(f=>f.Function.Name=="Pump")) row.Function.Selected=true;
+        aGraph.Draw(new(600,300),false,true); bGraph.Draw(new(600,400),false,true);
+        var aPercent=(int)Math.Round(aGraph.Model.Functions.First(f=>f.Selected).Function.Level*100);
+        var bPercent=(int)Math.Round(bGraph.Model.Functions.First(f=>f.Selected).Function.Level*100);
+        const int duration=30000;
+        var until=Environment.TickCount64+duration; double contactAt=0; bool high=false, independent=false;
+        while(Environment.TickCount64<until)
+        {
+            var now=ToyOscRouter.Clock;
+            aGraph.Tick(now); bGraph.Tick(now); a.Session.Tick(); b.Session.Tick();
+            if(now>=contactAt)
+            {
+                high=!high; contactAt=now+.12;
+                aSps.Apply(new(contact,[high?.8f:0f]),now); bSps.Apply(new(contact,[high?.8f:0f]),now);
+            }
+            aSps.Tick(now,true); bSps.Tick(now,true);
+            independent |= a.Adapter.Snapshot.Devices.All(d=>a.Controller.State(d.DeviceKey,"v1").RequestedPercent==80)
+                && b.Adapter.Snapshot.Devices.All(d=>b.Controller.State(d.DeviceKey,"pump").RequestedPercent==80);
+            if(!a.Session.Connected || !b.Session.Connected || aGraph.Model.Functions.Count(f=>f.Selected)!=4 || bGraph.Model.Functions.Count(f=>f.Selected)!=4)
+                throw new Exception($"Remote selection lost after {duration-(until-Environment.TickCount64)} ms; A selected={aGraph.Model.Functions.Count(f=>f.Selected)}, B selected={bGraph.Model.Functions.Count(f=>f.Selected)}; A: {aGraph.Notice}; B: {bGraph.Notice}; connected={a.Session.Connected && b.Session.Connected}");
+            Thread.Sleep(10);
+        }
+        Check(true,"four remote selections stay active in both directions for 30 seconds with changing all-function SPS contacts");
+        Check(a.Adapter.Snapshot.Devices.All(d=>a.Controller.State(d.DeviceKey,"pump").RequestedPercent==bPercent)
+            && b.Adapter.Snapshot.Devices.All(d=>b.Controller.State(d.DeviceKey,"v1").RequestedPercent==aPercent),
+            "remote drawing keeps reaching the receiving owner gates throughout sustained SPS activity");
+        Check(independent,"unrelated SPS functions continue routing while their siblings are controlled remotely");
     }
     private sealed class Fixture : IDisposable
     {
@@ -175,10 +302,17 @@ internal static class Program
     {
         public event Action? Changed { add {} remove {} } public event Action<string>? OutputFailed { add {} remove {} }
         public ConcurrentQueue<(string Channel,int Value)> Writes { get; } = new();
+        public bool BlockZero;
+        public ManualResetEventSlim ZeroEntered { get; }=new(false);
+        public ManualResetEventSlim AllowZero { get; }=new(false);
         public ToyAdapterSnapshot Snapshot { get; }
         public Adapter(int count) { Snapshot = new(ToyAdapterAvailability.Ready,false,"Fixture",Enumerable.Range(0,count).Select(i=>new LocalToyDescriptor(i==0 ? "fixture" : "fixture-"+i,"simulation","Fixture "+i,"Mock",ToyConnectionState.Connected,
             [new("v1",ToyCapabilityType.Vibration,"Vibration",0,20,1,null,null),new("pump",ToyCapabilityType.Pump,"Pump",0,3,1,null,null)],true,70,DateTimeOffset.UtcNow,10,true)).ToArray()); }
-        public void SendLevel(string device,string channel,int value) => Writes.Enqueue((channel,value));
+        public void SendLevel(string device,string channel,int value)
+        {
+            if(value==0 && BlockZero) {ZeroEntered.Set(); if(!AllowZero.Wait(3000)) throw new TimeoutException("Simulated zero remained blocked");}
+            Writes.Enqueue((channel,value));
+        }
         public Task StartScanAsync(CancellationToken c=default)=>Task.CompletedTask; public Task StopScanAsync(CancellationToken c=default)=>Task.CompletedTask;
         public Task ConnectAsync(string key,CancellationToken c=default)=>Task.CompletedTask; public Task DisconnectAsync(string key,CancellationToken c=default)=>Task.CompletedTask;
         public Task ReadBatteryAsync(string key,CancellationToken c=default)=>Task.CompletedTask; public ValueTask DisposeAsync()=>ValueTask.CompletedTask;

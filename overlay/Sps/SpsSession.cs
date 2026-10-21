@@ -12,7 +12,7 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
     private sealed record Binding(ToyInputLease Lease, int Percent);
     private readonly Dictionary<SpsTarget, Binding> bindings = [];
     private readonly Dictionary<SpsTarget, double> blocked = [];
-    private readonly Dictionary<SpsTarget, long> blockedGenerations = [];
+    private readonly Dictionary<SpsTarget, (long Generation, long OwnerRevision)> observedOwnership = [];
     private readonly Dictionary<SpsTarget, double> unavailableSince = [];
     private readonly Dictionary<string, double> levels = [];
     private readonly Dictionary<string, double> configuredAt = [];
@@ -31,12 +31,14 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
     {
         SpsStore.Validate(rules, 2048, 256);
         var changed = Rules.Where(old => !rules.Any(next => Same(old, next))).Concat(rules.Where(next => !Rules.Any(old => Same(old, next)))).ToArray();
-        foreach (var target in changed.SelectMany(r => r.Targets).Distinct()) End(target);
+        foreach (var target in changed.SelectMany(r => r.Targets).Distinct())
+        { End(target); if (!blocked.ContainsKey(target)) observedOwnership.Remove(target); }
         foreach (var rule in changed) { levels.Remove(rule.Id); configuredAt[rule.Id] = now; }
         Rules = rules.Select(r => r with { Targets = r.Targets.ToList() }).ToArray();
         foreach (var id in configuredAt.Keys.Where(id => !Rules.Any(r => r.Id == id)).ToArray()) configuredAt.Remove(id);
         foreach (var target in blocked.Keys.Concat(unavailableSince.Keys).Distinct().ToArray())
-            if (!Rules.Any(r => r.Targets.Contains(target))) { blocked.Remove(target); blockedGenerations.Remove(target); unavailableSince.Remove(target); }
+            if (!Rules.Any(r => r.Targets.Contains(target))) { blocked.Remove(target); observedOwnership.Remove(target); unavailableSince.Remove(target); }
+        foreach (var target in observedOwnership.Keys.Where(t => !Rules.Any(r => r.Targets.Contains(t))).ToArray()) observedOwnership.Remove(target);
         Notice = "Automatic · waiting for fresh SPS input";
     }
     private static bool Same(SpsRule a, SpsRule b) => a.Id == b.Id && a.Name == b.Name && a.Address == b.Address && a.RootAddress == b.RootAddress && a.Enabled == b.Enabled
@@ -58,20 +60,21 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
         try { return controller?.State(target.DeviceKey, target.ChannelId); }
         catch (InvalidOperationException) { return null; }
     }
-    private void BlockOwner(SpsTarget target, double now)
+    private void BlockOwner(SpsTarget target, double now, double? ownerChangedAt = null)
     {
         var state = State(target);
-        blocked[target] = state is { OwnershipChangedAt: > 0 } ? Math.Min(now, state.OwnershipChangedAt) : now;
-        blockedGenerations[target] = state?.InputGeneration ?? -1;
+        var changedAt = ownerChangedAt ?? state?.OwnershipChangedAt ?? 0;
+        blocked[target] = changedAt > 0 ? Math.Min(now, changedAt) : now;
     }
     private void BlockInput(SpsTarget target, double now)
     {
-        blocked[target] = now; blockedGenerations[target] = State(target)?.InputGeneration ?? -1;
+        blocked[target] = now;
     }
     public void Reset(double now, string reason)
     {
         foreach (var target in bindings.Keys.ToArray()) End(target);
         signals.Clear(); levels.Clear(); depths.Clear(); startAt = now;
+        foreach (var target in observedOwnership.Keys.Where(t => !blocked.ContainsKey(t)).ToArray()) observedOwnership.Remove(target);
         Notice = reason + " · waiting for fresh SPS input";
     }
     public void StopRule(string id, double now)
@@ -142,6 +145,7 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
             || now - root.ReceivedAt > rule.TimeoutMs / 1000d)) return "Waiting for root + tip";
         if (rule.RootAddress is not null && (!depths.TryGetValue(rule.Address, out var depth) || depth.Length is null)) return "Waiting for depth calibration";
         if (rule.Targets.Any(t => blocked.ContainsKey(t))) return "Release input to rearm";
+        if (rule.Targets.Any(t => State(t) is { InputSource: var owner } && owner != Guid.Empty && owner != source)) return "Paused · another controller";
         if (rule.Targets.Count == 0) return "Choose toy function";
         if (rule.Targets.All(t => !Ready(t))) return "Toy disconnected";
         if (rule.Targets.All(t => signal.ReceivedAt <= unavailableSince.GetValueOrDefault(t, double.NegativeInfinity))) return "Waiting for fresh input";
@@ -164,6 +168,7 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
         {
             if (controller is not null) Reset(now, "Bluetooth controller reset");
             controller = next;
+            observedOwnership.Clear();
         }
         var dt = Math.Clamp(now - lastTick, 0, .25); lastTick = now;
         if (!listening)
@@ -175,12 +180,30 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
         // A change-only neutral packet may arrive between owner Stop and this
         // timer. Compare it with the actual ownership change, not observation
         // time, so that single deliberate release is sufficient to rearm.
-        foreach (var (target, binding) in bindings.ToArray())
-            if (!Ready(target)) End(target);
-            else if (State(target) is not { } state || state.InputSource != binding.Lease.Source || state.InputGeneration != binding.Lease.Generation)
-            { bindings.Remove(target); BlockOwner(target, now); }
-        foreach (var target in blockedGenerations.Keys.ToArray())
-            if (State(target) is { } state && state.InputGeneration != blockedGenerations[target]) BlockOwner(target, now);
+        foreach (var target in Rules.Where(r => r.Enabled).SelectMany(r => r.Targets).Union(bindings.Keys).Distinct().ToArray())
+        {
+            if (!Ready(target)) { End(target); observedOwnership.Remove(target); continue; }
+            if (State(target) is not { } state) continue;
+            if (observedOwnership.TryGetValue(target, out var prior))
+            {
+                if (state.OwnerRevision != prior.OwnerRevision)
+                {
+                    bindings.Remove(target); BlockOwner(target, now, state.OwnerChangedAt);
+                }
+                else if (state.InputGeneration != prior.Generation && state.InputSource != source)
+                {
+                    if (state.InputSource != Guid.Empty || state.LastInputSource != source)
+                    {
+                        // Interactive ownership pauses only this target. Its release
+                        // requires a later fresh contact, never cached positive input.
+                        bindings.Remove(target);
+                        unavailableSince[target] = Math.Max(unavailableSince.GetValueOrDefault(target, double.NegativeInfinity), state.OwnershipChangedAt);
+                    }
+                    else if (bindings.Remove(target)) BlockOwner(target, now);
+                }
+            }
+            observedOwnership[target] = (state.InputGeneration, state.OwnerRevision);
+        }
         var desired = new Dictionary<SpsTarget, (double Level, double Until)>();
         var allTargets = Rules.Where(r => r.Enabled).SelectMany(r => r.Targets).Distinct().ToArray();
         foreach (var rule in Rules)
@@ -208,6 +231,7 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
         foreach (var target in allTargets.Union(bindings.Keys).ToArray())
         {
             if (!Ready(target)) { End(target); unavailableSince[target] = now; continue; }
+            if (State(target) is { InputSource: var owner } && owner != Guid.Empty && owner != source) continue;
             if (blocked.TryGetValue(target, out var since))
             {
                 var inputs = Rules.Where(r => r.Enabled && r.Targets.Contains(target)).ToArray();
@@ -236,8 +260,8 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
             {
                 try
                 {
-                    var lease = controller.BeginInput(target.DeviceKey, target.ChannelId, source, percent, life);
-                    bindings[target] = new(lease, percent); blockedGenerations[target] = lease.Generation;
+                    var lease = controller.TryBeginAutomaticInput(target.DeviceKey, target.ChannelId, source, percent, life);
+                    if (lease is not null) bindings[target] = new(lease, percent);
                 }
                 catch (InvalidOperationException)
                 {
@@ -256,7 +280,6 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
     private void End(SpsTarget target)
     {
         if (bindings.Remove(target, out var binding)) controller?.EndInput(binding.Lease);
-        if (!blocked.ContainsKey(target)) blockedGenerations.Remove(target);
     }
     public void Dispose() { if (disposed) return; Stop(); disposed = true; }
 }

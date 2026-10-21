@@ -2,6 +2,8 @@
 
 The **SPS** tab below **Toy control** uses the requested 1240 × 608 board proportions: toy functions in the left box and a human outline in the right box. SPS remains automatic when an assigned toy is connected and fresh avatar signals arrive. There is no separate SPS Start/Stop or presence switch.
 
+SPS pauses an individual function while a live desktop/avatar or remote Toy control input owns it. A zero within that live input still belongs to that controller. Unrelated functions keep routing. After that input ends, a new SPS contact update can resume the function without toggling All toys or reconnecting; old positive contacts are not replayed. An explicit owner Input/Stop remains authoritative and requires fresh neutral input before SPS rearming.
+
 ## Connect and arrange
 
 1. Connect local toys. Shared **Settings → Debug → Test mode** previews requests without actuator commands.

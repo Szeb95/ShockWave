@@ -55,3 +55,13 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Update fixture build failed.' }
           ./tests/update/bin/Release/net8.0-windows/Update.Checks.exe
           if ($LASTEXITCODE -ne 0) { throw 'Update checks failed.' }
+      - name: Check remote ownership and SPS handoff with simulated toys
+        run: |
+          dotnet build tests/remote/Remote.Checks.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'Remote fixture build failed.' }
+          ./tests/remote/bin/Release/net8.0-windows/Remote.Checks.exe
+          if ($LASTEXITCODE -ne 0) { throw 'Remote ownership checks failed.' }
+          dotnet build tests/sps/Sps.Checks.csproj --configuration Release
+          if ($LASTEXITCODE -ne 0) { throw 'SPS fixture build failed.' }
+          ./tests/sps/bin/Release/net8.0-windows/win-x64/Sps.Checks.exe
+          if ($LASTEXITCODE -ne 0) { throw 'SPS handoff checks failed.' }

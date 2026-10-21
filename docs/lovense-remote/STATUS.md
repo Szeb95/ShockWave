@@ -1,6 +1,13 @@
 # Workstream status
 
-Updated: 2026-10-21.
+Updated: 2026-10-22.
+
+## 2026-10-22 — remote control selection and SPS handoff fix in 0.7.2
+
+- **Reproduced:** the owner reports successful pairing and brief remote output, with Connect still Connected and SPS enabled on the receiver. A simulated contact zero/rise reproduces SPS stealing an active remote lease; a deterministic slow-zero fixture also reproduces the receiver stopping and rejecting its own fresh gesture.
+- **Fix:** automatic SPS atomically yields to a live interactive source, including zero, and only the affected function pauses. Runtime-only last-source/explicit-owner revision metadata distinguishes normal release from owner Input/Stop across timer ticks. A fresh post-release contact resumes SPS without a reconnect or assignment reset; cached positives cannot replay and Stop still requires neutral. A newer remote gesture replaces the same live session source without an unnecessary zero. No wire-version, receiver cap, Test mode, credential/migration, TURN, shocker or Unity change. Source CI now runs the remote and SPS ownership fixtures.
+- **Checks:** 51 native remote checks (including 30 seconds of four simulated toys per direction with changing all-function SPS contacts), 236 SPS, 124 Toy control, 95 local-toy and 69 updater checks. Full packaged dependencies/hash and worker paths are verified. Both network clients still run on one Windows PC; the owner's physical/network retest remains pending.
+- **Release candidate:** 0.7.2 Windows x64 ZIP, 116,006,301 bytes, SHA-256 `742376a2ecd9e3e543c457089a09f62848c95bdbd47769c679887b972626d48a`. The ongoing authorization to publish fixes for friends' updater applies. Preserve earlier release assets; hosted checks and public metadata/download verification follow. Both apps should update; existing automatic-update preferences remain unchanged.
 
 ## 2026-10-21 — 0.7.1 public and updater download verified
 

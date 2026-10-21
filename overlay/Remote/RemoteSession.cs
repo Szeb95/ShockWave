@@ -156,7 +156,11 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
                     }
                     else if (value.Claim > claims.GetValueOrDefault(key))
                     {
-                        End(key); claims[key] = value.Claim;
+                        // A fresh gesture may replace this same live source directly.
+                        // Ending it first queues an unnecessary zero and can make the
+                        // new gesture reject itself while that zero is still in flight.
+                        if (leases.TryGetValue(key, out var previous) && !ReferenceEquals(previous.Controller, target.Controller)) End(key);
+                        claims[key] = value.Claim;
                         leases[key] = new(target.Controller.BeginInput(target.Device, target.Function, source, value.Percent, life), target.Controller, value.Claim);
                     }
                     else Reject(value);

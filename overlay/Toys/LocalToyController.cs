@@ -10,6 +10,9 @@ internal sealed record ToyChannelState(string DeviceKey, string ChannelId, ToyCo
     public Guid InputSource { get; init; }
     public long InputGeneration { get; init; }
     public double OwnershipChangedAt { get; init; }
+    public Guid LastInputSource { get; init; }
+    public long OwnerRevision { get; init; }
+    public double OwnerChangedAt { get; init; }
     public bool Stopping { get; init; }
 }
 
@@ -30,8 +33,9 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
         public bool Active, Pending, StopPending, StopInFlight, WriteInFlight;
         public bool StopUnconfirmed;
         public long Deadline;
-        public Guid InputSource;
+        public Guid InputSource, LastInputSource;
         public long InputGeneration, SourceExpires, OwnershipChangedAt;
+        public long OwnerRevision, OwnerChangedAt;
         public long LastSent, InputAt, Revision;
         public double WaitMilliseconds, SubmitMilliseconds;
         public string Detail = "Off";
@@ -143,6 +147,8 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
                 SubmitMilliseconds = state.SubmitMilliseconds,
                 InputSource = state.InputSource, InputGeneration = state.InputGeneration,
                 OwnershipChangedAt = state.OwnershipChangedAt / (double)Stopwatch.Frequency,
+                LastInputSource = state.LastInputSource, OwnerRevision = state.OwnerRevision,
+                OwnerChangedAt = state.OwnerChangedAt / (double)Stopwatch.Frequency,
                 Stopping = state.StopPending || state.StopInFlight,
             };
         }
@@ -218,9 +224,14 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
 
     // A local controller claims a function only on fresh touch/Play. Renewals
     // cannot take it back after an owner edit, Stop, reset or expired lease.
-    public ToyInputLease BeginInput(string device, string channel, Guid source, int percent, TimeSpan lifetime)
+    public ToyInputLease BeginInput(string device, string channel, Guid source, int percent, TimeSpan lifetime) =>
+        BeginInputCore(device, channel, source, percent, lifetime, automatic: false)!;
+    // Background mappings must yield to an interactive lease, including its live zero.
+    public ToyInputLease? TryBeginAutomaticInput(string device, string channel, Guid source, int percent, TimeSpan lifetime) =>
+        BeginInputCore(device, channel, source, percent, lifetime, automatic: true);
+    private ToyInputLease? BeginInputCore(string device, string channel, Guid source, int percent, TimeSpan lifetime, bool automatic)
     {
-        if (source == Guid.Empty || lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromSeconds(2)) throw new ArgumentOutOfRangeException();
+        if (source == Guid.Empty || percent is < 0 or > 100 || lifetime <= TimeSpan.Zero || lifetime > TimeSpan.FromSeconds(2)) throw new ArgumentOutOfRangeException();
         ToyInputLease lease;
         lock (sync)
         {
@@ -228,8 +239,9 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
             RefreshAutomaticControlsCore();
             if (!armed.Contains(device) || ScanBlocksOutput) throw new InvalidOperationException("Toy controls are unavailable.");
             var state = Get(device, channel);
+            if (automatic && state.InputSource != Guid.Empty && state.InputSource != source) return null;
             RequestCore(device, channel, percent, allowPendingStop: state.InputSource == source && Now < state.SourceExpires);
-            state.InputSource = source; state.InputGeneration++; state.OwnershipChangedAt = Now; state.SourceExpires = Now + Ticks(lifetime.TotalSeconds);
+            state.InputSource = state.LastInputSource = source; state.InputGeneration++; state.OwnershipChangedAt = Now; state.SourceExpires = Now + Ticks(lifetime.TotalSeconds);
             if (state.Active) state.Deadline = state.SourceExpires;
             lease = new(device, channel, source, state.InputGeneration);
         }
@@ -254,10 +266,14 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
         lock (sync)
             if (!disposed && channels.TryGetValue((lease.DeviceKey, lease.ChannelId), out var state) &&
                 state.InputSource == lease.Source && state.InputGeneration == lease.Generation)
-            { ReleaseSource(state); StopCore(lease.DeviceKey, lease.ChannelId, "Controller stopped · fresh input required"); }
+            { ReleaseSource(state, ownerAction: false); StopCore(lease.DeviceKey, lease.ChannelId, "Controller stopped · fresh input required"); }
         Publish();
     }
-    private static void ReleaseSource(Channel state) { state.InputSource = Guid.Empty; state.InputGeneration++; state.OwnershipChangedAt = Now; state.SourceExpires = 0; }
+    private static void ReleaseSource(Channel state, bool ownerAction = true)
+    {
+        state.InputSource = Guid.Empty; state.InputGeneration++; state.OwnershipChangedAt = Now; state.SourceExpires = 0;
+        if (ownerAction) { state.OwnerRevision++; state.OwnerChangedAt = state.OwnershipChangedAt; }
+    }
     private void RequestCore(string device, string channel, int percent, bool allowPendingStop = false, bool renewal = false)
     {
             RefreshAutomaticControlsCore();
@@ -406,7 +422,7 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
                     foreach (var (key, state) in channels.ToArray())
                     {
                         if (state.InputSource != Guid.Empty && Now >= state.SourceExpires)
-                        { ReleaseSource(state); StopCore(key.Device, key.Channel, "Controller heartbeat expired · off"); changed = true; }
+                        { ReleaseSource(state, ownerAction: false); StopCore(key.Device, key.Channel, "Controller heartbeat expired · off"); changed = true; }
                         else if (state.Active && Now >= state.Deadline) { StopCore(key.Device, key.Channel, "Duration expired · off"); changed = true; }
                     }
                     foreach (var (key, state) in channels)
