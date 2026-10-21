@@ -2,6 +2,11 @@
 
 Updated: 2026-10-22.
 
+## 2026-10-22 — 0.7.2 public; updater download verified
+
+- **Published:** [0.7.2](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.2) is latest/stable, with the exact tested 116,006,301-byte ZIP/checksum. GitHub reports SHA-256 `742376a2ecd9e3e543c457089a09f62848c95bdbd47769c679887b972626d48a`. Earlier releases remain preserved. Source/tag `a86f0afc4432cb0a3cb027813ee5142ffd6150d7` passes [Source checks](https://github.com/Szeb95/ShockWave/actions/runs/39686618989), including the new remote/SPS ownership regression step.
+- **Public update path:** production updater code anonymously discovers 0.7.2 for 0.7.1, downloads the complete asset, verifies size/digest/version/manifest and stages it against an isolated fake installation using the original 0.7.1 ownership manifest. No real app installation/restart, physical output, preferences or Unity project is touched. Both users should update and pair again; post-fix physical/network retesting remains pending.
+
 ## 2026-10-22 — remote control selection and SPS handoff fix in 0.7.2
 
 - **Reproduced:** the owner reports successful pairing and brief remote output, with Connect still Connected and SPS enabled on the receiver. A simulated contact zero/rise reproduces SPS stealing an active remote lease; a deterministic slow-zero fixture also reproduces the receiver stopping and rejecting its own fresh gesture.

@@ -31,7 +31,7 @@ Another running copy or worker can prevent installation. The updater does not fo
 Publisher instructions:
 
 ```powershell
-./overlay/package-release.ps1 -Version 0.7.1
+./overlay/package-release.ps1 -Version 0.7.2
 ```
 
 Use a new numeric version for each future release. The command refuses an existing output path and builds `ShockWave-VERSION-win-x64.zip`, its SHA-256 sidecar and a complete package folder. It includes pinned .NET/Node/Bluetooth dependencies, notices, the project license, user guides and optional editor source. It excludes private settings, proprietary legacy BLE DLLs and debug files. It verifies all external Node runtime dependencies and sharing-code generation, as well as DLL-free hidden-worker startup checks.
@@ -52,3 +52,5 @@ These checks do not establish a live GitHub-to-installed-version update, physica
 
 
 Public 0.7.1 discovery, complete download, digest/manifest validation and staging have also been verified through the production updater with an isolated fake installation using the original 0.7.0 ownership manifest. This does not install or restart a real app.
+
+Public 0.7.2 discovery, full download and digest/manifest validation are verified using the production updater with a fake 0.7.1 installation. The real installed app and its preferences are unchanged by verification.
