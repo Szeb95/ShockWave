@@ -26,7 +26,7 @@ internal static class Program
         {
             if(args.SequenceEqual(new[] { "--read-vrchat" })) return LiveQuery();
             if(args.SequenceEqual(new[] { "--reproduce-pump" })) return PumpReproduction();
-            Defaults(); AutomaticLayout(); GlobalSources(); ActivationStates(); ScanRouting(); ReleaseOrdering(); RecordRecovery(); AllRouting(); ReceivedInputs(); DiscoveryWithoutListener(); Discovery(); Parsing(); Mapping(); Automatic(); Ownership(); Faults(); Timing(); ZeroCrossings(); Storage(); Socket(); BoardModel(); Depth(); Query(); LiveRows(); Ui();
+            Defaults(); AutomaticLayout(); LocalOwnership(); GlobalSources(); ActivationStates(); ScanRouting(); ReleaseOrdering(); RecordRecovery(); AllRouting(); ReceivedInputs(); DiscoveryWithoutListener(); Discovery(); Parsing(); Mapping(); Automatic(); Ownership(); Faults(); Timing(); ZeroCrossings(); Storage(); Socket(); BoardModel(); Depth(); Query(); LiveRows(); Ui();
             File.WriteAllText(Path.Combine(artifacts, "report.json"), JsonSerializer.Serialize(new { Passed = passed, PhysicalDevice = false, NativeDll = false, VrChat = false }));
             Console.WriteLine($"SPS: {passed} checks passed"); return 0;
         }
@@ -110,6 +110,17 @@ internal static class Program
             "other automatic functions and saved manual connections keep their settings");
         var settingsBefore=File.ReadAllText(boardPath); page.OptionsPresenter=options=>options.DialogResult=DialogResult.Cancel; Tap(board,Center(gear));
         Check(File.ReadAllText(boardPath)==settingsBefore,"Cancel on automatic toy options preserves saved routing");
+        var mouthCard=board.AutomaticPanel.Cards.Single(c=>c.HoleId==graph.Holes[0].Id);
+        page.ReceiveQuery(QueryFrame("automatic-fixture",0,0,ToyOscRouter.Clock) with {SocketEnabled=new Dictionary<string,bool> {
+            [graph.Holes[0].Stem]=false,[graph.Holes[1].Stem]=true }});
+        Thread.Sleep(35); page.Tick();
+        var sorted=board.AutomaticPanel.Cards.ToArray();
+        Check(sorted[0].HoleId==graph.Holes[1].Id && sorted[0].Top<sorted[1].Top && JsonSerializer.Serialize(page.Document.Holes)==manualHoles,
+            "enabled sockets move to the top without reordering saved holes or positions");
+        Check(Descendants(sorted[0]).OfType<Label>().Single(l=>l.Text==graph.Holes[1].Name).ForeColor==Color.FromArgb(16,183,140)
+            && Descendants(mouthCard).OfType<Label>().Single(l=>l.Text==graph.Holes[0].Name).ForeColor==Color.White,
+            "On socket names are green and Off names return to white");
+        Check(ReferenceEquals(mouthCard,sorted.Single(c=>c.HoleId==mouthCard.HoleId)),"live sorting reuses the same hole controls instead of rebuilding them");
         foreach(var width in new[]{1240,1040,790})
         {
             page.Size=new(width,608); page.PerformLayout(); Thread.Sleep(35); page.Tick();
@@ -442,6 +453,37 @@ internal static class Program
         var many=Enumerable.Range(0,256).Select(i=>new SpsTarget("synthetic-"+i,"v1")).ToArray();
         Check(SpsBoardModel.Compile(board,many).Count==2,"256 automatic target functions use bounded shared contact rules");
         File.Delete(file);
+    }
+    private static void LocalOwnership()
+    {
+        var remote=new SpsTarget("remote/"+new string('a',32),"v1");
+        var document=SpsBoardModel.FromRules([Rule(),Rule() with {Targets=[remote]}]);
+        document.AutomaticToyOptions.Add(new() {Target=remote});
+        var saved=JsonSerializer.Serialize(document.Wires);
+        Check(SpsBoardModel.Compile(document).All(r=>r.Targets.All(t=>t!=remote)),"legacy saved remote mappings cannot enter manual SPS routes");
+        Check(SpsBoardModel.Compile(document with {AllToysToAllHoles=true},[new("fixture","v1"),remote]).All(r=>r.Targets.All(t=>t!=remote)),
+            "automatic SPS rejects remote targets even if supplied alongside local inventory");
+        var path=Path.Combine(artifacts,"local-ownership.json"); var boardPath=Path.ChangeExtension(path,".board.json");
+        File.Delete(path); new SpsBoardStore(boardPath).Save(document);
+        var adapter=new FakeAdapter {IncludeRemote=true};
+        using var toys=new LocalToysPage(_=>adapter); using var page=new SpsPage(toys,()=>true,new SpsStore(path));
+        page.Size=new(1240,608); page.PerformLayout(); _=page.Handle;
+        toys.StartRememberedConnections(); while(toys.Busy) {Application.DoEvents();Thread.Sleep(5);}
+        page.Tick();
+        Check(page.Board.Rows.Count==2 && page.Board.Rows.All(r=>!r.Target.DeviceKey.StartsWith("remote/")),
+            "SPS displays only local functions even with a remote descriptor and saved remote fallback");
+        var presented=0; page.OptionsPresenter=options=>{presented++;options.DialogResult=DialogResult.Cancel;};
+        typeof(SpsPage).GetMethod("WireOptions",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(page,[document.Wires.Single(w=>w.Target==remote).Id]);
+        typeof(SpsPage).GetMethod("Connect",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(page,[remote,document.Holes[0].Id]);
+        Check(presented==0 && JsonSerializer.Serialize(page.Document.Wires)==saved,"stale remote line options and connection requests cannot configure SPS");
+        Tap(page.Board,Center(page.Board.AllToysBox)); page.Tick();
+        typeof(SpsPage).GetMethod("AutomaticToyOptions",BindingFlags.NonPublic|BindingFlags.Instance)!.Invoke(page,[remote]);
+        Check(page.Document.AllToysToAllHoles && presented==0 && page.Session.Rules.All(r=>r.Targets.All(t=>!t.DeviceKey.StartsWith("remote/"))) && page.Board.Rows.Count==2,
+            "remote automatic options are inaccessible and only local functions join All toys mode");
+        adapter.IncludeRemote=false; page.Tick();
+        Check(page.Board.Rows.All(r=>!r.Target.DeviceKey.StartsWith("remote/")) && JsonSerializer.Serialize(page.Document.Wires)==saved,
+            "departed friend mappings stay hidden without deleting saved layout data");
+        page.Shutdown(); File.Delete(boardPath);
     }
     private static void GlobalSources()
     {
@@ -1103,7 +1145,9 @@ internal static class Program
         public ManualResetEventSlim ZeroEntered { get; }=new(false);
         public ManualResetEventSlim AllowZero { get; }=new(false);
         private bool scanning, concurrentScanning;
-        public ToyAdapterSnapshot Snapshot => new(ToyAdapterAvailability.Ready, scanning, "Fixture adapter", [device]) { SupportsOutputWhileScanning = concurrentScanning };
+        public bool IncludeRemote;
+        public ToyAdapterSnapshot Snapshot => new(ToyAdapterAvailability.Ready, scanning, "Fixture adapter",
+            IncludeRemote?[device,device with {DeviceKey="remote/"+new string('a',32),Adapter="ShockWave remote",DisplayName="Remote fixture"}]:[device]) { SupportsOutputWhileScanning = concurrentScanning };
         public void Scan(bool concurrent) { scanning = true; concurrentScanning = concurrent; Changed?.Invoke(); }
         public void Connect(bool connected) { device = device with { ConnectionState = connected ? ToyConnectionState.Connected : ToyConnectionState.Disconnected }; Changed?.Invoke(); }
         public void Battery(int value) {device=device with {BatteryPercent=value}; Changed?.Invoke();}

@@ -1,5 +1,11 @@
 # 06 OSC and SPS mappings
 
+## Enabled ordering and local-only targets (2026-10-22)
+
+The owner's next corrections sort enabled/active sockets to the top of automatic mode and color their names green, with white Off names. The existing display-only enabled/contact fallback remains; controls are reused and saved hole order/positions/routing are not edited by sorting. SPS now explicitly excludes `remote/` toy rows, including saved fallback assignments, blocks their connection/manual/automatic options and skips them in both compiler paths. Legacy saved records are preserved as inert data. A simulated foreign descriptor plus old saved assignments checks the UI, entry-point guards and routes; normal/minimum previews are inspected. Current checks and release are recorded in STATUS.
+
+Friend inventory changes also reconcile Toy control immediately when the drawing/OSC timer is paused. The previous source reproduced a stale removed row until a later tick. The new proxy event updates the model on replacement/disconnect, ends only removed leases and restores returning rows unselected at zero. Native regression checks keep a local function and another friend function active through one toy's removal. This is a local event, not a remote protocol or output-authorization change; see brief 04 and STATUS.
+
 ## Shared automatic controls and socket On display (2026-10-22, source only)
 
 Implemented the owner's corrections: fresh All toys mode on, human hidden during automatic mode, one always-visible set of six source switches applying to every hole and future additions, compact hole statuses, and a gear in the larger right panel aligned beside each toy row. Each gear edits that function's automatic depth/movement response. Manual positions, source filters and wires are preserved; switching off restores the human and a drag/double-click hint left of SPS connection status. Existing saved manual choices are retained. Additive graph fields and migration details are in PROTOCOL.

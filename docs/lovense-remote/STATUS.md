@@ -2,6 +2,12 @@
 
 Updated: 2026-10-22.
 
+## 2026-10-22 — 0.7.8 socket ordering and friend-toy visibility prepared
+
+- **Requested / implemented:** enabled/active sockets move to the top of automatic SPS with green names; Off names return white. Sorting reuses the same controls without editing saved positions/order/routing. SPS explicitly excludes `remote/` targets from inventory, saved fallback rows, settings entry points and both compiler modes, while preserving old saved records. Friend-toy removal/disconnect now reconciles Toy control immediately through a local proxy event, including with a paused drawing/OSC timer; removed leases/rows disappear, siblings continue and returning rows start unselected at zero.
+- **Reproduction / initial checks:** the paused-timer removal fixture failed against the previous source, retaining the removed row. Updated source passes **94 native remote**, **282 SPS** and **124 Toy control** checks. A native SPS drag/capture assertion failed once before its unchanged rerun passed; both logs remain under `work/sps-checks/`. New normal/minimum socket ordering/color previews were visually inspected. Final public-helper/native/package checks are recorded under `work/sps-visibility-checks/` and precede publication.
+- **Package / scope:** complete 0.7.8 Windows ZIP built at `overlay/dist/sps-visibility-20261022/ShockWave-0.7.8-win-x64.zip`, **116,038,016 bytes**, SHA-256 **f0ea47f288e25c58fbcaa4492d2aade09b3d727496c55bc6bb360de2db7f9970**, plus checksum. Production publish is warning-free and bundled workers/dependency hashes pass. Earlier releases/packages remain preserved. Build/push continues under the owner's release instruction from this session. No real settings/keys, running app, physical output or Unity state was changed; physical loss detection still depends on the friend's backend reporting it. Source/hosted/public-updater publication results follow separately.
+
 ## 2026-10-22 — 0.7.7 SPS controls and saved friends published; public updater verified
 
 - **Published:** latest/stable [ShockWave 0.7.7](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.7), tested **116,041,636-byte** ZIP/checksum, SHA-256 **c90c2143b0796c80fc822fb30de79d894af6bb7189ec8e6fdec4b3cdc9223ca8**. GitHub's uploaded digest matches. Source/tag `4db4e1b3212972319006d9217bbe935d1dc78346` passes [hosted source checks](https://github.com/Szeb95/ShockWave/actions/runs/39826732738). The 41 reviewed/scanned source/documentation paths include SPS and saved friends; no generated/private files were pushed. Previous releases/packages are preserved.

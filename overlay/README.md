@@ -48,6 +48,8 @@ Closing with any physical toy still connected shows **Cancel** and **Close app**
 
 ## SPS body map
 
+Enabled sockets appear first with green names. SPS lists/configures only local toy functions; remote saved assignments are inert and hidden. Friend toys appear in Toy control only while present in the friend's live inventory, and disappear immediately on removal/disconnect without waiting for its drawing/OSC timer.
+
 Fresh **SPS** setups start with **All toys → all holes** on. The larger right panel shows one always-visible set of six source switches applying to every hole and future additions, above the hole-status list. Each function's gear is in that right panel beside its toy row and opens automatic depth/movement and response options. Existing saved manual setups keep their choice. Switching All toys off restores the human, manual lines/filters/positions and the drag/double-click hint beside connection status.
 
 Turn **Discovery** on for possible SPS plugs and sockets. Click **Add**, then turn Discovery off for the automatic hole list or manual circles. Face tracking, shock signals and feedback are filtered out. New contacts stay in the list until added; existing saved contacts and toy connections keep working. Unfamiliar SPS formats are marked **Input setup needed** and create inactive metadata markers until their input format is supported. Discovery also reads unchanged/zero-valued query contacts; list paging/wheel navigation leaves settings alone.

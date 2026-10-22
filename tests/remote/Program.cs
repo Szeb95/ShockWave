@@ -17,7 +17,7 @@ internal static partial class Program
         {
             if (args.Contains("--friends-internet")) FriendInternet();
             else if (args.Contains("--log-stress")) LogStress();
-            else { Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); FriendStorage(); FriendPage(); Panel(); }
+            else { Receiver(); LiveGestureReplacement(); Inventory(); InventoryRemoval(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); FriendStorage(); FriendPage(); Panel(); }
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
             File.WriteAllText(Path.Combine(artifacts, args.Contains("--friends-internet") ? "friends-internet-report.json" : args.Contains("--log-stress") ? "log-stress-report.json" : "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet") || args.Contains("--friends-internet"), PackagedStartup = args.Contains("--package-startup") }));
@@ -114,6 +114,29 @@ internal static partial class Program
             bool rejected=false; try { r.Receive("state",doc.RootElement); } catch(JsonException) { rejected=true; }
             Check(rejected,"null state elements are rejected before output");
         }
+    }
+    private static void InventoryRemoval()
+    {
+        using var fixture=new Fixture(); var remote=fixture.Session;
+        var first=new RemoteToyInfo(new string('a',32),"First friend toy",60,[new(new string('b',32),"Vibration","Vibration",100)]);
+        var second=first with { Id=new string('c',32),Name="Second friend toy" };
+        remote.Receive("inventory",Element(new RemoteInventory([first,second],[])));
+        using var graph=new ToyControlSession(()=>fixture.Adapter.Snapshot,()=>fixture.Controller) { Remote=remote.Toys };
+        graph.Tick(ToyOscRouter.Clock);
+        foreach(var row in new[]{0,2,3}) graph.Action("InRow"+row,false);
+        graph.Draw(new(600,300),false,true); graph.Tick(ToyOscRouter.Clock);
+        Check(remote.Toys.Levels().Length==2 && fixture.Controller.State("fixture","v1").RequestedPercent>0,"local and two friend functions can be active before an inventory change");
+        remote.Receive("inventory",Element(new RemoteInventory([second],[])));
+        Check(graph.Model.Toys.All(t=>t.Id!="remote/"+first.Id) && graph.Model.FunctionCount==3,
+            "a friend's removed toy disappears immediately even without a control-panel timer tick");
+        Check(remote.Toys.Levels().Single().Device==second.Id && fixture.Controller.State("fixture","v1").RequestedPercent>0,
+            "removing one friend toy preserves other remote and local input");
+        remote.Disconnect();
+        Check(graph.Model.Toys.All(t=>!t.Id.StartsWith("remote/")) && graph.Model.FunctionCount==2 && remote.Toys.Levels().Length==0,
+            "friend disconnect immediately removes all friend rows and active input without a timer tick");
+        remote.Receive("inventory",Element(new RemoteInventory([first,second],[])));
+        Check(graph.Model.Functions.Where(f=>f.Toy.Id.StartsWith("remote/")).All(f=>!f.Selected && !f.Function.LoopRunning && f.Function.Level==0)
+            && remote.Toys.Levels().Length==0,"reappearing friend toys start unselected at zero without old activity");
     }
     private static void SpsHandoff()
     {

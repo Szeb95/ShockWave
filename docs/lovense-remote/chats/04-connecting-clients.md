@@ -1,5 +1,9 @@
 # 04 connecting clients
 
+## Immediate friend-toy removal (2026-10-22)
+
+The owner requested that absent/disconnected friend toys disappear. A simulated inventory-removal fixture reproduced a retained control row when the drawing/OSC timer was not ticking. `RemoteToyController` now emits a local inventory event on replacement/disconnect; the graph session reconciles immediately and releases subscriptions on proxy changes/disposal. Removed rows/leases vanish without disturbing sibling remote or local input; returning rows start unselected at zero. Wire freshness/aliases, receiver limits/Stop, saved friend access and no replay are unchanged. SPS explicitly lists/configures/routes only local toys. STATUS records native/public-helper checks and the release; physical power-off detection still depends on the owner's backend reporting the device loss.
+
 ## Owner-approved connection policy — 2026-10-19
 
 Both people run ShockWave. Private-code pairing and each person's **Connect** state authorize connected supported functions automatically, without per-toy or reciprocal-use approvals. Either person can disconnect/reconnect at any time; enabled peers retry automatically, restore fresh inventory and start with zero activity. The receiving app still enforces its limits/Test mode/Stop, peer authentication, freshness and no replay. This current user instruction supersedes the separate-grant/paused-rearm UI proposed below. Remote toys appear in Toy control; remote shocker inventory and discrete transport prepare the owner's later shocker tab. No TURN is implemented. See the implemented direct v1 section of PROTOCOL and STATUS for actual checks/remaining network and physical dependencies.

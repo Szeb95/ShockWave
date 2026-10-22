@@ -5,10 +5,11 @@ internal sealed class SpsAutomaticPanel : UserControl
     private readonly ThemedScrollPanel scroll=new() { Dock=DockStyle.Fill,AutoScroll=true,BackColor=Color.FromArgb(41,43,47) };
     private readonly Panel content=new() { Dock=DockStyle.Top,BackColor=Color.FromArgb(41,43,47) };
     private readonly Dictionary<string,SpsAutomaticHoleCard> cards=[];
+    private List<SpsAutomaticHoleCard> ordered=[];
     private string signature="\0";
     internal readonly SpsAutomaticSourceOptions SourceOptions=new() { Dock=DockStyle.Top,Height=176 };
     internal event Action<SpsSources>? SourcesChanged;
-    internal IReadOnlyCollection<SpsAutomaticHoleCard> Cards=>cards.Values;
+    internal IReadOnlyCollection<SpsAutomaticHoleCard> Cards=>ordered;
     internal SpsAutomaticPanel()
     {
         BackColor=scroll.BackColor; Controls.Add(scroll); Controls.Add(SourceOptions); scroll.Controls.Add(content);
@@ -23,7 +24,7 @@ internal sealed class SpsAutomaticPanel : UserControl
         {
             signature=next; content.SuspendLayout();
             foreach(Control control in content.Controls.Cast<Control>().ToArray()) control.Dispose();
-            content.Controls.Clear(); cards.Clear();
+            content.Controls.Clear(); cards.Clear(); ordered.Clear();
             foreach(var hole in document.Holes)
             {
                 var card=new SpsAutomaticHoleCard(hole);
@@ -33,11 +34,13 @@ internal sealed class SpsAutomaticPanel : UserControl
             content.ResumeLayout(); ArrangeCards();
         }
         foreach(var hole in document.Holes) cards[hole.Id].Synchronize(hole,enabled(hole),contact(hole));
+        var sorted=document.Holes.OrderByDescending(h=>h.Kind=="Socket" && cards[h.Id].Active).Select(h=>cards[h.Id]).ToList();
+        if(!ordered.SequenceEqual(sorted)) { ordered=sorted; ArrangeCards(); }
     }
     private void ArrangeCards()
     {
         var y=10;
-        foreach(var card in cards.Values) { card.SetBounds(0,y,Math.Max(1,scroll.ClientSize.Width-20),64); y+=74; }
+        foreach(var card in ordered) { card.SetBounds(0,y,Math.Max(1,scroll.ClientSize.Width-20),64); y+=74; }
         content.Height=Math.Max(64,y); content.Width=Math.Max(1,scroll.ClientSize.Width-20);
     }
 }
@@ -87,17 +90,20 @@ internal sealed class SpsAutomaticSourceOptions : RoundedPanel
 internal sealed class SpsAutomaticHoleCard : RoundedPanel
 {
     internal string HoleId { get; }
+    internal bool Active { get; private set; }
+    private readonly Label name=new() { Dock=DockStyle.Top,Height=26,AutoEllipsis=true,ForeColor=Color.White,Font=new("Segoe UI",11,FontStyle.Bold) };
     private readonly Label state=new() { Dock=DockStyle.Top,Height=24,ForeColor=Color.FromArgb(181,186,193) };
     internal SpsAutomaticHoleCard(SpsHole hole)
     {
         HoleId=hole.Id; BackColor=Color.FromArgb(54,57,63); Padding=new(12,6,8,6);
-        var name=new Label { Text=hole.Name,Dock=DockStyle.Top,Height=26,AutoEllipsis=true,ForeColor=Color.White,Font=new("Segoe UI",11,FontStyle.Bold) };
+        name.Text=hole.Name;
         Controls.Add(state); Controls.Add(name);
     }
     internal void Synchronize(SpsHole hole,bool? enabled,bool contact)
     {
-        var active=enabled??contact;
+        var active=Active=enabled??contact;
         state.Text=(active?"● ":"○ ")+(enabled==true?"On":enabled==false?"Off":contact?"Contact":"Waiting for contact")+" · "+hole.Kind;
         state.ForeColor=active?Color.FromArgb(16,183,140):Color.FromArgb(181,186,193);
+        name.ForeColor=active?Color.FromArgb(16,183,140):Color.White;
     }
 }

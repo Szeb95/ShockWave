@@ -1,5 +1,7 @@
 # Remote connection checks
 
+Inventory-removal regressions keep a local and two friend functions active, then remove one friend function without ticking the graph. Its row/lease must disappear immediately while the other inputs continue. Friend disconnect removes all remote rows, and returning inventory starts unselected at zero with no restored activity. This specifically covers a paused OSC/render timer; no real devices are used.
+
 The 0.7.7 saved-friends checks cover isolated Windows encryption/reload, corrupt/failed storage preservation, key replacement refusal, rename/Forget and offscreen friend selection with Connect initially off. Node `remote-friends.test.mjs` covers both-side persistence acknowledgments, distinct private nonce derivation, failure, simultaneous saves, duplicate/malformed/expired requests and deterministic saved callers. No real user store is used.
 
 To compile and check without creating an app EXE/package:

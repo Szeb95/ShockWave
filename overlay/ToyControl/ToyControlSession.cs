@@ -20,7 +20,21 @@ internal sealed class ToyControlSession : IDisposable
     private int remoteResetRevision;
     private readonly TimeSpan leaseLife = TimeSpan.FromSeconds(2);
     public PanelModel Model { get; } = new() { AdaptivePaging = true };
-    public RemoteToyController? Remote { get; set; }
+    private RemoteToyController? remote;
+    public RemoteToyController? Remote
+    {
+        get=>remote;
+        set
+        {
+            if(ReferenceEquals(remote,value)) return;
+            foreach(var key in bindings.Keys.Where(k=>k.Toy.StartsWith("remote/",StringComparison.Ordinal)).ToArray()) End(key,true);
+            if(remote is not null) remote.InventoryChanged-=RemoteInventoryChanged;
+            remote=value;
+            if(!disposed && remote is not null) remote.InventoryChanged+=RemoteInventoryChanged;
+            RemoteInventoryChanged();
+        }
+    }
+    private void RemoteInventoryChanged() { if(!disposed) Sync(); }
     public ShockerControlSession Shockers { get; } = new();
     public bool ShockerPage { get; private set; }
     public PanelModel DisplayModel => ShockerPage ? Shockers.Model : Model;
@@ -228,6 +242,7 @@ internal sealed class ToyControlSession : IDisposable
     public void Dispose()
     {
         if (disposed) return; disposed = true;
+        if(remote is not null) remote.InventoryChanged-=RemoteInventoryChanged;
         foreach (var key in bindings.Keys.ToArray()) End(key, false);
     }
     public void Suspend()

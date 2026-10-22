@@ -29,6 +29,7 @@ internal sealed record SpsSignal(string Address, string Kind, string Zone, strin
 
 internal static class SpsSignals
 {
+    public static bool LocalDevice(string key)=>!key.StartsWith("remote/",StringComparison.Ordinal);
     private const string Prefix = "/avatar/parameters/";
     private static readonly Regex Known = new(@"^(?:VF\d+_)?(?:(OGB)/(Pen|Orf)/([^/]+)/([^/]+)|(VFH)/Zone/Touch/([^/]+)/(Self|Others))$", RegexOptions.CultureInvariant);
     private static readonly HashSet<string> Fields = new(StringComparer.Ordinal)

@@ -20,6 +20,7 @@ internal sealed class RemoteToyController(Func<bool> testMode) : IToyInputContro
     private readonly Dictionary<(string, string), Channel> channels = [];
     private long generation;
     public event Action<string>? Log;
+    public event Action? InventoryChanged;
     public int ActiveInputCount => channels.Values.Count(c => c.Source != Guid.Empty);
     public bool TestMode => testMode();
     public ToyAdapterSnapshot Snapshot { get; private set; } = new(ToyAdapterAvailability.Ready, false, "No remote toys", []);
@@ -30,8 +31,9 @@ internal sealed class RemoteToyController(Func<bool> testMode) : IToyInputContro
                 f.Name + (f.Maximum < 100 ? $" · max {f.Maximum}%" : ""), 0, 100, 1, null, null)).ToArray(), true, t.Battery, DateTimeOffset.UtcNow, 30, false)).ToArray();
         Snapshot = new(ToyAdapterAvailability.Ready, false, "Remote app connected", devices);
         foreach (var key in channels.Keys.Where(k => !devices.Any(d => d.DeviceKey == k.Item1 && d.Capabilities.Any(c => c.ChannelId == k.Item2))).ToArray()) channels.Remove(key);
+        InventoryChanged?.Invoke();
     }
-    public void Disconnect() { channels.Clear(); Snapshot = Snapshot with { Devices = [], Message = "Remote app disconnected" }; }
+    public void Disconnect() { channels.Clear(); Snapshot = Snapshot with { Devices = [], Message = "Remote app disconnected" }; InventoryChanged?.Invoke(); }
     private Channel Get(string device, string function)
     {
         if (!Snapshot.Devices.Any(d => d.DeviceKey == device && d.Capabilities.Any(c => c.ChannelId == function))) throw new InvalidOperationException("Remote toy disconnected");

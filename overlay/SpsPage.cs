@@ -82,7 +82,8 @@ internal sealed class SpsPage : UserControl
         if(!unrecognized.ContainsKey(input.Address) && unrecognized.Count>=64) unrecognized.Remove(unrecognized.MinBy(p=>p.Value.At).Key);
         unrecognized[input.Address]=(value,now);
     }
-    private SpsTarget[] AutomaticTargets() => (toys.Snapshot?.Devices ?? []).SelectMany(d=>d.Capabilities.Where(SpsSignals.Scalar)
+    private IEnumerable<LocalToyDescriptor> LocalDevices=>(toys.Snapshot?.Devices??[]).Where(d=>SpsSignals.LocalDevice(d.DeviceKey));
+    private SpsTarget[] AutomaticTargets() => LocalDevices.SelectMany(d=>d.Capabilities.Where(SpsSignals.Scalar)
         .Select(c=>new SpsTarget(d.DeviceKey,c.ChannelId))).Distinct().OrderBy(t=>t.DeviceKey,StringComparer.Ordinal).ThenBy(t=>t.ChannelId,StringComparer.Ordinal).ToArray();
     private bool ConfigureRouting(double now)
     {
@@ -142,7 +143,7 @@ internal sealed class SpsPage : UserControl
     private void PaintBoard()
     {
         var rows=new List<SpsToyRow>();
-        foreach(var device in toys.Snapshot?.Devices??[])
+        foreach(var device in LocalDevices)
             foreach(var capability in device.Capabilities.Where(SpsSignals.Scalar))
             {
                 var target=new SpsTarget(device.DeviceKey,capability.ChannelId); var connected=device.ConnectionState==ToyConnectionState.Connected;
@@ -157,7 +158,7 @@ internal sealed class SpsPage : UserControl
                 rows.Add(new(target,device.DisplayName,capability.DisplayName,
                     !connected?"Disconnected":$"{(toys.Controller?.TestMode!=false?"Preview":"Output")} {sent}% · battery {(device.BatteryPercent is null?"?":device.BatteryPercent+"%")}",color,connected,percent));
             }
-        foreach(var target in document.Wires.Select(w=>w.Target).Distinct().Where(t=>rows.All(r=>r.Target!=t)))
+        foreach(var target in document.Wires.Select(w=>w.Target).Distinct().Where(t=>SpsSignals.LocalDevice(t.DeviceKey) && rows.All(r=>r.Target!=t)))
         {
             var capability=toys.Snapshot?.Devices.FirstOrDefault(d=>d.DeviceKey==target.DeviceKey)?.Capabilities.FirstOrDefault(c=>c.ChannelId==target.ChannelId);
             if(capability is not null && !SpsSignals.Scalar(capability)) continue;
@@ -184,7 +185,7 @@ internal sealed class SpsPage : UserControl
     }
     private void Connect(SpsTarget target,string holeId)
     {
-        if(document.AllToysToAllHoles) return;
+        if(document.AllToysToAllHoles || !SpsSignals.LocalDevice(target.DeviceKey)) return;
         if(document.Holes.FirstOrDefault(h=>h.Id==holeId)?.DiscoveryOnly==true) { SetMessage("This possible SPS contact needs a supported input format before connecting a toy."); return; }
         if(document.Wires.FirstOrDefault(w=>w.Target==target && w.HoleId==holeId) is { } existing) { WireOptions(existing.Id); return; }
         var next=document.Copy(); next.Wires.Add(new() { HoleId=holeId,Target=target });
@@ -220,6 +221,7 @@ internal sealed class SpsPage : UserControl
     {
         if(document.AllToysToAllHoles) return;
         if(document.Wires.FirstOrDefault(w=>w.Id==id) is not { } wire) return;
+        if(!SpsSignals.LocalDevice(wire.Target.DeviceKey)) return;
         var hole=document.Holes.Single(h=>h.Id==wire.HoleId); var row=board.Rows.FirstOrDefault(r=>r.Target==wire.Target);
         using var options=new SpsWireOptions(wire,hole,row?.Function??"Toy function"); Present(options);
         if(options.DialogResult!=DialogResult.OK) return;
@@ -241,7 +243,7 @@ internal sealed class SpsPage : UserControl
     }
     private void AutomaticToyOptions(SpsTarget target)
     {
-        if(closed || !document.AllToysToAllHoles) return;
+        if(closed || !document.AllToysToAllHoles || !SpsSignals.LocalDevice(target.DeviceKey)) return;
         var setting=document.AutomaticToyOptions.FirstOrDefault(o=>o.Target==target)??new SpsWire { Id=SpsBoardModel.Key("auto/"+target.DeviceKey+"/"+target.ChannelId),Target=target };
         var row=board.Rows.FirstOrDefault(r=>r.Target==target);
         using var options=new SpsWireOptions(setting,null,row?.Function??"Toy function",automatic:true); Present(options);

@@ -88,7 +88,7 @@ internal static class SpsBoardModel
     {
         if (board.AllToysToAllHoles)
         {
-            var targets = allTargets?.Distinct().OrderBy(t => t.DeviceKey, StringComparer.Ordinal).ThenBy(t => t.ChannelId, StringComparer.Ordinal).ToList() ?? [];
+            var targets = allTargets?.Where(t=>SpsSignals.LocalDevice(t.DeviceKey)).Distinct().OrderBy(t => t.DeviceKey, StringComparer.Ordinal).ThenBy(t => t.ChannelId, StringComparer.Ordinal).ToList() ?? [];
             if (targets.Count > 256) throw new InvalidDataException("Use at most 256 toy functions with All toys to all holes.");
             if (targets.Count == 0) return [];
             // Shared rules per contact keep automatic routing bounded. Saved
@@ -108,6 +108,7 @@ internal static class SpsBoardModel
         var rules = new List<SpsRule>();
         foreach (var wire in board.Wires)
         {
+            if(!SpsSignals.LocalDevice(wire.Target.DeviceKey)) continue;
             var hole = board.Holes.Single(h => h.Id == wire.HoleId);
             if(hole.DiscoveryOnly) continue; // Unverified contact metadata is never an output rule.
             var inputs = wire.ExactInputs.Count > 0 ? wire.ExactInputs : hole.Inputs;
