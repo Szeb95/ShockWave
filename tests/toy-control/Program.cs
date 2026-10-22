@@ -381,7 +381,7 @@ internal static class Program
         using var toys=new LocalToysPage(); using var form=new OverlayForm(new BridgeConfig(),initialSaveConfig:_=>{},initialLocalToys:toys);
         Button Field(string name)=>(Button)typeof(OverlayForm).GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(form)!;
         Check(Field("toyControlNav").Text.Contains("Toy control") && Field("toyControlNav").Top>Field("toyPanelNav").Top && Field("toyControlNav").Top<Field("logsNav").Top,"Toy control navigation sits directly below Toy panel");
-        Check(ToyControlContract.BoolInputs.Length+ToyControlContract.FloatInputs.Length+1+ToyControlContract.FeedbackFields().Length==615 && ToyControlContract.Rows==7 && ToyControlContract.Version==6,"v6 adds contact pose input and surface cursor feedback with zero synced parameter cost");
+        Check(ToyControlContract.BoolInputs.Length+ToyControlContract.FloatInputs.Length+3+ToyControlContract.FeedbackFields().Length==618 && ToyControlContract.Rows==7 && ToyControlContract.Version==7,"v7 retains surface pointer feedback and adds local hand mode and recoverable shocker view pulses");
         Check(Field("shockerControlNav").Top>Field("toyControlNav").Top && Field("shockerControlNav").Top<Field("spsNav").Top,"new Shocker control tab sits below Toy control");
     }
     private static void Design(bool warp)

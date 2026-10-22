@@ -13,7 +13,7 @@ internal sealed class ToyFunctionRow : RoundedPanel
     private readonly Label title = Label("", 10, true), function = Label("", 8), state = Label("", 8),
         inputLabel = Label("Input", 8, true), inputValue = Label("", 8),
         sensitivityLabel = Label("Sensitivity", 8, true), sensitivityValue = Label("", 8),
-        maxLabel = Label("Max %", 8, true), maxValue = Label("", 8), batteryLabel = Label("Battery unknown", 8);
+        maxLabel = Label("Max %", 8, true), maxValue = Label("", 8), batteryLabel = Label("", 8);
     private readonly CheckBox options = new ThemeToggle() { Text = "Options", TextBeforeSwitch = true, BackColor = PanelColor, ForeColor = Muted, Font = new Font("Segoe UI", 8) };
     private readonly Button readBattery = Button("Read battery"),
         forget = Button("Forget toy"), stopToy = Button("Stop toy");
@@ -107,7 +107,7 @@ internal sealed class ToyFunctionRow : RoundedPanel
         device = next; title.Text = device.DisplayName;
         help.SetToolTip(title, device.DisplayName + " · " + device.Model);
         help.SetToolTip(function, function.Text);
-        batteryLabel.Text = device.BatteryPercent is int percent ? $"Battery {percent}%" : "Battery unknown";
+        batteryLabel.Text = device.ConnectionState==ToyConnectionState.Connected && device.BatteryPercent is int percent ? $"Battery {percent}%" : "";
         readBattery.Enabled = !busy && device.ConnectionState == ToyConnectionState.Connected;
         forget.Enabled = !busy && device.IsRemembered && device.ConnectionState is
             ToyConnectionState.Discovered or ToyConnectionState.Disconnected or ToyConnectionState.Unavailable;

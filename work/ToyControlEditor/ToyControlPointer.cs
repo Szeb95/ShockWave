@@ -79,7 +79,7 @@ namespace ShockWave.ToyControl
         {
             foreach(var entry in c.layers[1].stateMachine.states)
             {
-                var ready=entry.state.name=="Place beside right hand" || entry.state.name=="Dropped" || entry.state.name=="Follow right hand" || entry.state.name=="Follow avatar";
+                var ready=entry.state.name=="Place beside right hand" || entry.state.name=="Dropped" || entry.state.name=="Follow right hand" || entry.state.name=="Follow back of right hand" || entry.state.name=="Follow avatar";
                 Driver(entry.state,"InputReady",ready ? 1 : 0);
                 if(!ready) foreach(var name in new[] {"InPointerLPress","InPointerRPress","InPointerReady","InInputMode","InPanelTouch","InPage"}) Driver(entry.state,name,0);
             }
@@ -140,9 +140,16 @@ namespace ShockWave.ToyControl
         }
         private static void ShockerViewLayer(AnimatorController c)
         {
-            var layer=Layer(c,"Shocker view acknowledgement");var off=State(layer,"Toys / unavailable",Clip(c,"Shocker view off",.1f));layer.defaultState=off;var on=State(layer,"Shocker controls visible",Clip(c,"Shocker view ready",.1f));
-            Driver(off,"InShockerReady",0);Driver(on,"InShockerReady",1);var enter=Transition(off,on);Bool(enter,"Visible",true);Bool(enter,"InputReady",true);enter.AddCondition(AnimatorConditionMode.If,0,"IsLocal");enter.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"ShockerPage");
-            foreach(var suffix in new[] {"Visible","InputReady"}) Bool(Transition(on,off),suffix,false);Transition(on,off).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(on,off).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"ShockerPage");
+            var layer=Layer(c,"Shocker view acknowledgement");var off=State(layer,"Toys / unavailable",Clip(c,"Shocker view off",.1f));layer.defaultState=off;
+            var on=State(layer,"Shocker controls visible",Clip(c,"Shocker view ready",.25f));var pulse=State(layer,"Shocker controls pulse",Clip(c,"Shocker view pulse",.25f));
+            Driver(off,"InShockerReady",0);Driver(off,"InShockerBeat",0);
+            Driver(on,"InShockerReady",1);Driver(on,"InShockerBeat",1);Driver(pulse,"InShockerReady",1);Driver(pulse,"InShockerBeat",0);
+            var enter=Transition(off,on);Bool(enter,"Visible",true);Bool(enter,"InputReady",true);Bool(enter,"AppReady",true);enter.AddCondition(AnimatorConditionMode.If,0,"IsLocal");enter.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"ShockerPage");
+            foreach(var state in new[] {on,pulse}) {
+                foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(state,off),suffix,false);
+                Transition(state,off).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,off).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"ShockerPage");
+            }
+            foreach(var pair in new[] {(on,pulse),(pulse,on)}) {var t=Transition(pair.Item1,pair.Item2);t.hasExitTime=true;t.exitTime=1;}
         }
         private static void PointerReady(AnimatorStateTransition t)
         {Bool(t,"Visible",true);Bool(t,"InputReady",true);Bool(t,"AppReady",true);t.AddCondition(AnimatorConditionMode.If,0,"IsLocal");t.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer");}

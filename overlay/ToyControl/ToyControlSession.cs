@@ -45,7 +45,7 @@ internal sealed class ToyControlSession : IDisposable
     {
         if(ShockerPage==shockers) return;
         Model.Release(false); Shockers.Cancel(); Vrc.BlockTouch(); ShockerPage=shockers;
-        InputModeRevision++; PageChanged?.Invoke();
+        Vrc.ResetShockerView(); InputModeRevision++; PageChanged?.Invoke();
     }
     private IToyInputController? ControllerFor(string toy) => toy.StartsWith("remote/", StringComparison.Ordinal) ? Remote : controller;
     public VrcToyInput Vrc { get; }
@@ -272,7 +272,11 @@ internal sealed class VrcToyInput(ToyControlSession session)
     public string WaitingReason { get; private set; } = "Waiting for VRC";
     public int Interruptions { get; private set; }
     public bool IsLive { get; private set; }
-    public bool ShockerReady => IsLive && Bool("InShockerReady");
+    private double lastShockerBeat=double.NegativeInfinity, currentTime;
+    private bool hasShockerBeat, freshShockerBeats;
+    public bool ShockerReady => IsLive && session.ShockerPage && (Bool("InShockerReady") || freshShockerBeats && currentTime-lastShockerBeat<.75);
+    public void ResetShockerView()
+    { bools["InShockerReady"]=false; bools["InShockerBeat"]=false; hasShockerBeat=freshShockerBeats=false; lastShockerBeat=double.NegativeInfinity; }
     private bool Bool(string name) => bools.GetValueOrDefault(name);
     public void BlockTouch()
     {
@@ -285,7 +289,7 @@ internal sealed class VrcToyInput(ToyControlSession session)
         for(var hand=0;hand<2;hand++) blockedPointer[hand]=previousPointerPress[hand]=Bool("InPointer"+(hand==0 ? "L" : "R")+"Press");
         pointerHand=-1;
     }
-    public void Reset(string reason="Panel link reset") { if(IsLive) Interruptions++; WaitingReason=reason; IsLive = visible = visibilityKnown = hadBeat = false; actions.Clear(); BlockTouch(); session.VrcLost(); }
+    public void Reset(string reason="Panel link reset") { if(IsLive) Interruptions++; WaitingReason=reason; IsLive = visible = visibilityKnown = hadBeat = false; ResetShockerView(); actions.Clear(); BlockTouch(); session.VrcLost(); }
     public bool Apply(OscMessage message, double now)
     {
         if (message.Address == "/avatar/change") { if(message.Arguments.Length!=1 || message.Arguments[0] is not string) return false; Reset("Avatar changed"); return true; }
@@ -304,6 +308,12 @@ internal sealed class VrcToyInput(ToyControlSession session)
         else if (message.Arguments[0] is int i && i is 0 or 1) current = i == 1;
         else return false;
         var prior = Bool(name); bools[name] = current;
+        if(name=="InShockerReady") { if(!current) {hasShockerBeat=freshShockerBeats=false;lastShockerBeat=double.NegativeInfinity;} return true; }
+        if(name=="InShockerBeat")
+        {
+            if(session.ShockerPage && prior!=current) {freshShockerBeats=hasShockerBeat && now-lastShockerBeat<.75;hasShockerBeat=true;lastShockerBeat=now;}
+            return true;
+        }
         if (name == "Visible") { if (!current) Reset("Panel hidden"); visible = current; visibilityKnown = true; return true; }
         if (name == "InBeat")
         {
@@ -339,6 +349,7 @@ internal sealed class VrcToyInput(ToyControlSession session)
     }
     public void Tick(double now)
     {
+        currentTime=now;
         var live = visible && hadBeat && now - lastBeat < 2;
         if (IsLive && !live) { Interruptions++; WaitingReason="Panel heartbeat interrupted"; session.VrcLost(); BlockTouch(); actions.Clear(); hadBeat = false; }
         IsLive = live;
@@ -351,6 +362,7 @@ internal sealed class VrcToyInput(ToyControlSession session)
             {
                 if(session.Shockers.ArmedFromVrc) session.Shockers.Cancel();
                 blockedPanel=Bool("InPanelTouch"); previousPanel=blockedPanel; panelDrag=0;
+                if(session.PointerMode) {TickPointer(now,false);actions.Clear();return;}
                 for(var hand=0;hand<2;hand++) { blockedPointer[hand]=previousPointerPress[hand]=Bool("InPointer"+(hand==0 ? "L" : "R")+"Press"); session.Shockers.Release(hand+1); }
                 session.Shockers.Release(3); actions.Clear(); return;
             }
@@ -385,7 +397,7 @@ internal sealed class VrcToyInput(ToyControlSession session)
         }
         previousPanel=touch;
     }
-    private void TickPointer(double now)
+    private void TickPointer(double now,bool commandsReady=true)
     {
         var held=pointerHand;
         for(var hand=0;hand<2;hand++)
@@ -396,6 +408,10 @@ internal sealed class VrcToyInput(ToyControlSession session)
             PointerValid[hand]=valid;
             if(valid) PointerPoints[hand]=point;
             var hit=valid ? ToyControlLayout.Hit(point,session) : 0;
+            // Keep hover and escape/navigation alive while the page acknowledgement
+            // arrives. Held command presses must release before the gate opens.
+            if(!commandsReady && hit is not (13 or 28 or 29))
+            {pointerHand=-1;blockedPointer[hand]=press;previousPointerPress[hand]=press;session.Shockers.Release(hand+1);continue;}
             if(held==hand)
             {
                 if(!valid || hit!=pointerDrag) { if(session.TouchFromVrc) session.Release(false); pointerHand=-1; blockedPointer[hand]=press; }

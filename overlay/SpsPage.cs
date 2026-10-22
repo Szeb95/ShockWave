@@ -156,7 +156,7 @@ internal sealed class SpsPage : UserControl
                 catch(InvalidOperationException) { }
                 var color=Colors[rows.Count%Colors.Length];
                 rows.Add(new(target,device.DisplayName,capability.DisplayName,
-                    !connected?"Disconnected":$"{(toys.Controller?.TestMode!=false?"Preview":"Output")} {sent}% · battery {(device.BatteryPercent is null?"?":device.BatteryPercent+"%")}",color,connected,percent));
+                    !connected?"Disconnected":$"{(toys.Controller?.TestMode!=false?"Preview":"Output")} {sent}%"+(device.BatteryPercent is int battery ? $" · battery {battery}%" : ""),color,connected,percent));
             }
         foreach(var target in document.Wires.Select(w=>w.Target).Distinct().Where(t=>SpsSignals.LocalDevice(t.DeviceKey) && rows.All(r=>r.Target!=t)))
         {

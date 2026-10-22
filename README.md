@@ -53,7 +53,7 @@ These are software-test previews with simulated devices and empty connection cod
 
 **[Add ShockWave Avatar Panel to Creator Companion](https://szeb95.github.io/ShockWave/)** · [Panel setup guide](work/ToyControlEditor/README.md)
 
-Keep the Unity tools updated through VCC. In Unity open **Tools → ShockWave → Panel**, choose the radial menu path and explicitly add/update your avatar. The panel starts hidden; its menu contains **Show panel**, **Follow right hand** and **Panel size** (default 20%). Upload again after updating avatar content. Use Windows app **0.7.9 or later** for the new pointer.
+Keep the Unity tools updated through VCC. In Unity open **Tools → ShockWave → Panel**, choose the radial menu path and explicitly add/update your avatar. The panel starts hidden; its menu contains **Show panel**, **In right hand**, **Back of right hand** and **Panel size** (default 20%). Upload again after updating avatar content. Use Windows app **0.7.10 or later** for the new pointer.
 
 ## Getting started
 

@@ -70,7 +70,7 @@ internal static class ShockerControlChecks
         check(s.Intensity==50 && output.Count==5,"VR intensity slider has a thick hit area and sends no signals");
         Touch(1088,308,true); Touch(1088,308,false); Put("Visible",false); session.Tick(now);
         check(!s.Armed,"hiding or losing the avatar cancels pending shock confirmation");
-        Put("Visible",true); Put("InBeat",false); session.Tick(now); session.Action("InInputMode",false);
+        Put("Visible",true); Put("InBeat",false); Put("InShockerReady",true); session.Tick(now); session.Action("InInputMode",false);
         void Point(string hand,float x,bool down)
         { PoseInput.Aim(Put,hand,x,308); Put("InPointer"+hand+"Press",down); session.Tick(now); }
         foreach(var hand in new[] { "L","R" })
@@ -80,6 +80,18 @@ internal static class ShockerControlChecks
             Point(hand,878,false); Point(hand,878,true); Point(hand,878,false);
             check(output.Count==before+1,"independent "+hand+" pointer release/confirmation submits once");
         }
+        session.SetPage(false);session.SetPage(true);
+        Point("L",1088,false);Point("L",1088,true);
+        check(session.Vrc.PointerValid[0] && !s.Armed,"shocker-page hover stays visible while fresh view acknowledgement is pending, with commands blocked");
+        Put("InShockerBeat",true);session.Tick(now);now+=.25;Put("InShockerBeat",false);session.Tick(now);
+        check(session.Vrc.ShockerReady && !s.Armed,"two fresh page pulses recover a lost ready packet without replaying the held arm press");
+        Point("L",1088,false);Point("L",1088,true);Point("L",1088,false);
+        check(s.Armed,"a fresh press can arm after the pulse-based page confirmation");s.Cancel();
+        now+=.76;Put("InBeat",true);session.Tick(now);
+        check(!session.Vrc.ShockerReady,"view-pulse recovery expires when the page stops acknowledging");
+        PoseInput.Aim(Put,"L",1128,148);Put("InPointerLPress",false);session.Tick(now);Put("InPointerLPress",true);session.Tick(now);
+        check(!session.ShockerPage,"pointer can navigate back from an unacknowledged shocker page");
+        Put("InPointerLPress",false);session.Tick(now);session.SetPage(true);Put("InShockerReady",true);session.Tick(now);
         check(ToyControlLayout.Hit(new(410,400),session)==30 && ToyControlLayout.Hit(new(660,400),session)==31,
             "108-pixel-wide slider hit boxes match the new vertical tracks");
         check(ToyControlLayout.Hit(new(810,240),session)==0 && ToyControlLayout.Hit(new(878,308),session)==33,

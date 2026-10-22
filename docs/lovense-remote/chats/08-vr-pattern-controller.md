@@ -1,5 +1,13 @@
 # 08 VR pattern controller
 
+## Avatar panel v7 / hand placements and shocker pointer — 2026-10-23
+
+The owner requested In right hand and Back of right hand radial presets, avatar-root turning and hidden unknown battery. Two screenshots show adjusted whole-host transforms; those cannot portably define wrist offsets. Tools/ShockWave/Panel now captures the actual visible panel relative to the live humanoid right wrist without moving/saving a scene. Captures survive explicit Update in Placement.json and are preserved by later updates. Automatic alignment uses index/little-finger geometry and follows full wrist rotation. One local unsaved HandMode Int makes the two presets exclusive; both off follows root motion/rotation without tracked head pitch/roll. Strict joystick-source discrimination is not claimed.
+
+The live read-only query showed an active right-edge grab with Hand Gun, making InputReady false. New grab entry requires Fist, Touch and floating mode, so pointer gestures and attached-hand self-contact cannot steal input. Separately, native pointer math/navigation now continue during shocker-view acknowledgement; device commands remain blocked. Alternating local InShockerBeat pulses recover a lost Ready packet after two fresh edges, expire after 750 ms and retain release-before-click. Old Ready Bool compatibility remains. Page changes clear old acknowledgement. Unknown/disconnected battery is hidden in avatar, Toy panel and SPS rows.
+
+Matching releases are Windows 0.7.10 and VCC 0.1.1. v7 has 618 local expression parameters, 554 feedback Floats and 13 FX layers; four constraints/41 receivers/four senders remain. Provider/remote limits, Test mode, expiry and no retry/replay are unchanged. Only isolated Unity/software checks are performed; no write/import/launch of the real avatar project. The owner must update VCC tools, explicitly Update/upload the avatar and physically retest both pages/hand presets. See STATUS for actual checks and publication.
+
 ## Avatar panel v6 / VCC follow-up — 2026-10-23
 
 Current design supersedes the older native-ray pointer and expanded radial menu below. The pointer reconstructs two rigid local wrist points per hand from panel-root face-proximity contacts and analytically intersects the visible board in the Windows app. Selection and six cursor feedback fields share the result. It rejects misses/transparent gaps/grazing and incoherent samples; no scene collider can lift the tip. Left/right gestures retain release-before-click and drag ownership; native output gates and v5 shock confirmation remain unchanged. Inset row targets plus a shared 200 ms full-release guard prevent neighbor toggles during a continuous touch. New app 0.7.9 and an explicit avatar Update/upload are both required.

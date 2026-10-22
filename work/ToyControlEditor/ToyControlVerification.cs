@@ -60,9 +60,10 @@ namespace ShockWave.ToyControl
                 leftHand.transform.localRotation=Quaternion.Euler(0,35,0); rightHand.transform.localRotation=Quaternion.Euler(0,-25,0);
                 var leftIndex=new GameObject("Synthetic left index proximal"); leftIndex.transform.SetParent(leftHand.transform,false); leftIndex.transform.localPosition=Vector3.forward*.02f;
                 var rightIndex=new GameObject("Synthetic right index proximal"); rightIndex.transform.SetParent(rightHand.transform,false); rightIndex.transform.localPosition=Vector3.forward*.02f;
+                var rightLittle=new GameObject("Synthetic right little proximal");rightLittle.transform.SetParent(rightHand.transform,false);rightLittle.transform.localPosition=new Vector3(0,-.025f,.02f);
                 var leftTip=new GameObject("Synthetic left index distal"); leftTip.transform.SetParent(leftIndex.transform,false); leftTip.transform.localPosition=Vector3.forward*0.06f;
                 var rightTip=new GameObject("Synthetic right index distal"); rightTip.transform.SetParent(rightIndex.transform,false); rightTip.transform.localPosition=Vector3.forward*0.06f;
-                Transform Bone(HumanBodyBones b) { return b==HumanBodyBones.RightHand ? rightHand.transform : b==HumanBodyBones.LeftHand ? leftHand.transform : b==HumanBodyBones.RightIndexProximal ? rightIndex.transform : b==HumanBodyBones.LeftIndexProximal ? leftIndex.transform : b==HumanBodyBones.RightIndexDistal ? rightTip.transform : b==HumanBodyBones.LeftIndexDistal ? leftTip.transform : null; }
+                Transform Bone(HumanBodyBones b) { return b==HumanBodyBones.RightHand ? rightHand.transform : b==HumanBodyBones.LeftHand ? leftHand.transform : b==HumanBodyBones.RightIndexProximal ? rightIndex.transform : b==HumanBodyBones.LeftIndexProximal ? leftIndex.transform : b==HumanBodyBones.RightIndexDistal ? rightTip.transform : b==HumanBodyBones.LeftIndexDistal ? leftTip.transform : b==HumanBodyBones.RightLittleProximal ? rightLittle.transform : null; }
                 var host=ToyControlSetupWindow.Build(avatar,0.04f,0.10f,out folder,resolveBone:Bone,menuPath:" Utilities / ShockWave ");
                 Check(!host.transform.Find("Panel").gameObject.activeSelf,"New panel is hidden before any Animator runs, including Unity preview");
                 var fury=host.GetComponents<Component>().Single(c=>c!=null && c.GetType().FullName=="VF.Model.VRCFury");
@@ -75,7 +76,7 @@ namespace ShockWave.ToyControl
                 
                 Check(ToyControlSetupWindow.ValidateAvatar(avatar)!=null,"Duplicate install refused");
                 var parameters=AssetDatabase.LoadAssetAtPath<VRCExpressionParameters>(folder+"/Parameters.asset");
-                Check(parameters.parameters.Length==616 && parameters.parameters.All(p=>p.saved==(p.name==ToyControlContract.Prefix+"Size") && !p.networkSynced && p.defaultValue==(p.name==ToyControlContract.Prefix+"Size" ? 0.2f : 0)),"616 local parameters; only size is saved, confirmation is never saved");
+                Check(parameters.parameters.Length==618 && parameters.parameters.All(p=>p.saved==(p.name==ToyControlContract.Prefix+"Size") && !p.networkSynced && p.defaultValue==(p.name==ToyControlContract.Prefix+"Size" ? 0.2f : 0)),"618 local parameters; only size is saved, confirmation is never saved");
                 Check(parameters.CalcTotalCost()==0,"No synced expression-parameter memory consumed");
                 foreach(var path in AssetDatabase.FindAssets("t:VRCExpressionsMenu",new[] {folder}).Select(AssetDatabase.GUIDToAssetPath))
                     Check(AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(path).controls.Count<=8,"Menu page within eight controls: "+Path.GetFileName(path));
@@ -93,8 +94,11 @@ namespace ShockWave.ToyControl
                 var clearWidth=new SerializedObject(clearContact).FindProperty("size").vector3Value.x; var stopWidth=new SerializedObject(stopContact).FindProperty("size").vector3Value.x;
                 Check(stopContact.position.x-clearContact.position.x-(clearWidth+stopWidth)/2>0.010f,"Inset button touch zones provide a physical gap between Clear and Stop");
                 var placement=panel.GetComponent<VRCParentConstraint>();
-                Check(placement.Sources.Count==4 && placement.Sources[1].SourceTransform==leftHand.transform && placement.Sources[2].SourceTransform==rightHand.transform,"Spawn and both real hand sources are wired without changing the avatar rig");
-                Check(Vector3.Distance(panel.position,rightHand.transform.position+new Vector3(-ToyControlSetupWindow.BoardWidth/2-0.04f,0,0.10f))<0.0001f,"Default panel center is beside the right hand");
+                Check(placement.Sources.Count==5 && placement.Sources[1].SourceTransform==leftHand.transform && placement.Sources[2].SourceTransform==rightHand.transform,"Spawn and both real hand sources are wired without changing the avatar rig");
+                Check(Vector3.Distance(panel.position,host.transform.Find("HandAnchors/RightHandPosition/SpawnRight").position)<0.0001f && Vector3.Dot(panel.forward,(rightTip.transform.position-rightIndex.transform.position).normalized)>.999f,"Default in-hand alignment follows the actual extended-finger axes");
+                Check(Vector3.Dot(panel.up,(rightIndex.transform.position-rightLittle.transform.position).normalized)>.999f,"In-hand up follows the index/thumb side rather than the hand's back, preventing a quarter-turn roll");
+                var backAnchor=host.transform.Find("HandAnchors/RightHandPosition/BackRight");
+                Check(Vector3.Dot(backAnchor.forward,-panel.right)>.999f && Vector3.Dot(backAnchor.up,panel.forward)>.999f,"Back-of-hand panel faces out of the hand's back with the fingers along its top");
                 var mainMenu=AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(folder+"/Controls.asset");
                 Check(mainMenu.controls.Any(m=>m.name=="Panel size" && m.type==VRCExpressionsMenu.Control.ControlType.RadialPuppet && m.subParameters.Single().name==ToyControlContract.Prefix+"Size"),"Panel size radial is in the main eight-control menu");
                 Check(renderer.sharedMaterial.GetTexture("_Labels").width==2480 && renderer.sharedMaterial.GetTexture("_Glyphs").width==768,"Labels and glyph atlas have doubled text resolution");
@@ -124,6 +128,7 @@ namespace ShockWave.ToyControl
                 animator.SetBool(ToyControlContract.Prefix+"RxBeat",true);
                 for(var i=0;i<20;i++) animator.Update(0.02f);
                 Check(panel.gameObject.activeSelf && !panel.GetComponent<VRCParentConstraint>().FreezeToWorld && Mathf.Abs(panel.GetComponent<VRCParentConstraint>().Sources[3].Weight-1)<.001f,"Show follows avatar; freeze="+panel.GetComponent<VRCParentConstraint>().FreezeToWorld+" rootWeight="+panel.GetComponent<VRCParentConstraint>().Sources[3].Weight+" state="+animator.GetCurrentAnimatorStateInfo(1).fullPathHash);
+                VerifyPlacements(host,animator,root.transform,rightHand.transform,Check);
                 var size=panel.Find("Size");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0); for(var i=0;i<5;i++) animator.Update(0.02f);
                 Check(Mathf.Abs(size.localScale.x-0.4f)<0.0001f && size.Find("Contacts").parent==size && size.Find("Grips").parent==size,"Minimum radial size scales Board, touch and grips as one child while placement stays frozen");
@@ -198,14 +203,14 @@ namespace ShockWave.ToyControl
                 });
                 Check(!ShaderUtil.ShaderHasError(renderer.sharedMaterial.shader),"Full PC shader compiles/renders without errors");
                 animator.SetFloat(ToyControlContract.ReceivePrefix+"ShockerPage",1); for(var i=0;i<5;i++) animator.Update(.02f);
-                Check(animator.GetCurrentAnimatorStateInfo(10).IsName("Shocker controls visible") && controller.layers[10].stateMachine.states.Single(s=>s.state.name=="Shocker controls visible").state.behaviours.OfType<VRCAvatarParameterDriver>().Any(d=>d.localOnly && d.parameters.Any(p=>p.name==ToyControlContract.Prefix+"InShockerReady" && p.value==1)),"Shocker page enters its acknowledgement state with an explicit local VRC driver (driver execution requires VRChat)");
+                Check((animator.GetCurrentAnimatorStateInfo(10).IsName("Shocker controls visible") || animator.GetCurrentAnimatorStateInfo(10).IsName("Shocker controls pulse")) && controller.layers[10].stateMachine.states.Where(s=>s.state.name.StartsWith("Shocker controls")).All(s=>s.state.behaviours.OfType<VRCAvatarParameterDriver>().Any(d=>d.localOnly && d.parameters.Any(p=>p.name==ToyControlContract.Prefix+"InShockerReady" && p.value==1))),"Shocker page pulses an explicit local acknowledgement (driver execution requires VRChat)");
                 animator.SetBool(ToyControlContract.Prefix+"InputReady",false); for(var i=0;i<3;i++) animator.Update(.02f);
                 Check(animator.GetCurrentAnimatorStateInfo(10).IsName("Toys / unavailable"),"Grab/input guard revokes shocker acknowledgement");
                 animator.SetBool(ToyControlContract.Prefix+"InputReady",true); animator.SetFloat(ToyControlContract.ReceivePrefix+"ShockerPage",0); for(var i=0;i<5;i++) animator.Update(.02f);
                 Check(animator.GetCurrentAnimatorStateInfo(10).IsName("Toys / unavailable"),"Returning to toys revokes shocker acknowledgement");
                 var shockerFixture=Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("SHOCKWAVE_VR_FRAME")),"shocker-feedback.json");
                 var shockerFrame=JsonUtility.FromJson<Frame>(File.ReadAllText(shockerFixture));
-                Check(shockerFrame.version==6 && shockerFrame.values.Length==ToyControlContract.FeedbackFields().Length,"Shocker fixture uses the production v6 contract");
+                Check(shockerFrame.version==7 && shockerFrame.values.Length==ToyControlContract.FeedbackFields().Length,"Shocker fixture uses the production v7 contract");
                 var toySaved=new MaterialPropertyBlock(); renderer.GetPropertyBlock(toySaved);
                 var shockerBlock=new MaterialPropertyBlock(); foreach(var v in shockerFrame.values) shockerBlock.SetFloat("_"+v.name,v.value); shockerBlock.SetFloat("_LinkOnline",1);
                 foreach(var armed in new[] {false,true})
@@ -239,6 +244,19 @@ namespace ShockWave.ToyControl
                     var emptyGraph=At(600,450); Check(Mathf.Abs(emptyGraph.r-43/255f)<0.012f && Mathf.Abs(emptyGraph.g-45/255f)<0.012f,"No selection removes the avatar grid and waveform");
                 });
                 renderer.SetPropertyBlock(designSavedBlock);
+                var batterySaved=new MaterialPropertyBlock();renderer.GetPropertyBlock(batterySaved);
+                foreach(var state in new[]{0,1,2}) {
+                    var batteryBlock=new MaterialPropertyBlock();renderer.GetPropertyBlock(batteryBlock);
+                    batteryBlock.SetFloat("_R0_Battery",state==0 ? 0 : 68/101f);
+                    var packed=(int)Math.Round(frame.values.Single(v=>v.name=="R0_State").value*65535);
+                    batteryBlock.SetFloat("_R0_State",ToyControlContract.PackBytes(packed&255,state==2 ? (packed>>8)&~1 : (packed>>8)|1));renderer.SetPropertyBlock(batteryBlock);
+                    Render(panel,Path.Combine(output,"vr-battery-"+state+".png"),(image,camera,board)=> {
+                        var ink=0;
+                        for(var y=278;y<292;y++) for(var x=146;x<218;x++) {var p=camera.WorldToScreenPoint(board.TransformPoint(new Vector3(x/1240f-.5f,.5f-(y-100)/608f,0)));var c=image.GetPixel(Mathf.RoundToInt(p.x),Mathf.RoundToInt(p.y));if(c.r>.4f && c.g>.4f && c.b>.4f) ink++;}
+                        Check(state==1 ? ink>10 : ink==0,"Battery text appears only for a connected toy with a known reading: "+state);
+                    });
+                }
+                renderer.SetPropertyBlock(batterySaved);
                 var savedBlock=new MaterialPropertyBlock(); renderer.GetPropertyBlock(savedBlock); var emptyBlock=new MaterialPropertyBlock(); renderer.GetPropertyBlock(emptyBlock); emptyBlock.SetFloat("_Count",0);emptyBlock.SetFloat("_Pages",0);emptyBlock.SetFloat("_Online",0);renderer.SetPropertyBlock(emptyBlock);
                 Render(panel,Path.Combine(output,"vr-panel-empty.png"),(image,camera,board)=>
                 {
@@ -255,7 +273,7 @@ namespace ShockWave.ToyControl
                 if(Environment.GetEnvironmentVariable("SHOCKWAVE_VR_BENCHMARK")=="1") Benchmark(panel,folder,frame,output);
                 var export=Path.Combine(output,"generated");Directory.CreateDirectory(export);
                 foreach(var file in new[] {"Panel.shader","Panel.cginc","Labels.png","ShockerLabels.png","Glyphs.png","GlyphMetrics.png","Status.png"}) File.Copy(folder+"/"+file,Path.Combine(export,file),true);
-                animator.SetBool(ToyControlContract.Prefix+"Follow",true); for(var i=0;i<5;i++) animator.Update(0.02f);
+                animator.SetInteger(ToyControlContract.Prefix+"HandMode",1); for(var i=0;i<5;i++) animator.Update(0.02f);
                 Check(!panel.GetComponent<VRCParentConstraint>().FreezeToWorld,"Follow unfreezes placement");
                 for(var i=0;i<120;i++) animator.Update(0.02f);
                 renderer.GetPropertyBlock(block); var fresh=block.GetFloat("_LinkOnline"); if(fresh==0) fresh=renderer.sharedMaterial.GetFloat("_LinkOnline");
@@ -270,7 +288,10 @@ namespace ShockWave.ToyControl
                 {
                     host.name=ToyControlSetupWindow.LegacyHostName;
                     Check(ToyControlSetupWindow.ValidateAvatar(avatar,true)==null,"ShockWave recognizes the previous branded host for explicit update");
-                    updated=ToyControlSetupWindow.Build(avatar,0.04f,0.10f,out updateFolder,replaceExisting:true,resolveBone:Bone);
+                    var captured=new ToyControlSetupWindow.HandPlacements {inHand=new ToyControlSetupWindow.HandPose {captured=true,position=new Vector3(-.18f,.02f,.06f),rotation=new Vector3(10,20,30)},backHand=new ToyControlSetupWindow.HandPose {captured=true,position=new Vector3(0,.06f,.08f),rotation=new Vector3(90,0,0)}};
+                    updated=ToyControlSetupWindow.Build(avatar,0.04f,0.10f,out updateFolder,replaceExisting:true,resolveBone:Bone,placements:captured);
+                    Check(Vector3.Distance(updated.transform.Find("HandAnchors/RightHandPosition/SpawnRight").localPosition,captured.inHand.position)<.00001f && Vector3.Distance(updated.transform.Find("HandAnchors/RightHandPosition/BackRight").localPosition,captured.backHand.position)<.00001f,"Explicit avatar update uses both captured hand-relative placements");
+                    Check(File.ReadAllText(updateFolder+"/Placement.json").Contains("true"),"Captured placements persist in the generated content folder for future updates");
                     Check(updated.name==ToyControlSetupWindow.HostName && host.name==ToyControlSetupWindow.LegacyHostName,"Update prepares the ShockWave host without renaming the existing installation");
                     Check(updateFolder!=folder && host!=null && Selection.activeObject==selected && assetHash.SequenceEqual(File.ReadAllBytes(folder+"/FX.controller")),"Preparing a user-requested update preserves the old host, assets and scene selection until the explicit swap");
                 }
@@ -281,6 +302,40 @@ namespace ShockWave.ToyControl
             catch(Exception ex) {Debug.LogException(ex); if(!string.IsNullOrWhiteSpace(output)) File.WriteAllText(Path.Combine(output,"failure.txt"),ex.ToString()); EditorApplication.Exit(1);}
             finally {if(root!=null) UnityEngine.Object.DestroyImmediate(root); if(folder!=null && AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder); EditorSceneManager.ClosePreviewScene(scene);}
         }
+        private static void VerifyPlacements(GameObject host,Animator animator,Transform avatar,Transform wrist,Action<bool,string> check)
+        {
+            void Step(){for(var i=0;i<20;i++) animator.Update(.02f);}
+            var constraint=host.transform.Find("Panel").GetComponent<VRCParentConstraint>();
+            animator.SetBool(ToyControlContract.Prefix+"GrabRRight",true);animator.SetInteger("GestureRight",6);
+            foreach(var pair in new[]{(1,0),(2,4)}) {
+                animator.SetInteger(ToyControlContract.Prefix+"HandMode",pair.Item1);Step();
+                check(!constraint.FreezeToWorld && Mathf.Abs(constraint.Sources[pair.Item2].Weight-1)<.0001f,"Hand preset "+pair.Item1+" follows the correct anchor despite its own wrist touching a strip");
+                var state=((AnimatorController)animator.runtimeAnimatorController).layers[1].stateMachine.states.Single(s=>s.state.name==(pair.Item1==1 ? "Follow right hand" : "Follow back of right hand")).state;
+                check(state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters).Any(p=>p.name==ToyControlContract.Prefix+"InputReady" && p.value==1),"Attached hand mode explicitly keeps panel input ready");
+                animator.SetInteger("GestureRight",1);Step();
+                check(Mathf.Abs(constraint.Sources[pair.Item2].Weight-1)<.0001f,"A fist cannot steal an attached hand preset");animator.SetInteger("GestureRight",6);
+            }
+            animator.SetInteger(ToyControlContract.Prefix+"HandMode",0);Step();
+            check(constraint.Sources[3].SourceTransform==avatar && Mathf.Abs(constraint.Sources[3].Weight-1)<.0001f,"Both hand toggles off follows avatar-root turns rather than tracked head tilt");
+            foreach(var hand in new[]{"L","R"}) foreach(var pose in new[]{6,7}) {
+                animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+"Right",true);animator.SetInteger(hand=="L" ? "GestureLeft" : "GestureRight",pose);Step();
+                check(!constraint.FreezeToWorld && Mathf.Abs(constraint.Sources[3].Weight-1)<.0001f,hand+" pistol/Thumbs Up at the edge cannot start a grab");
+                animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+"Right",false);animator.SetInteger(hand=="L" ? "GestureLeft" : "GestureRight",0);
+            }
+            animator.SetBool(ToyControlContract.Prefix+"GrabRRight",false);animator.SetInteger("GestureRight",0);
+            animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);animator.SetBool(ToyControlContract.Prefix+"GrabRRight",true);animator.SetInteger("GestureRight",1);Step();
+            check(Mathf.Abs(constraint.Sources[3].Weight-1)<.0001f,"Pointer mode cannot enter a physical grab even with a fist at the strip");
+            animator.SetBool(ToyControlContract.Prefix+"GrabRRight",false);animator.SetInteger("GestureRight",0);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0);Step();
+            var preview=new GameObject("Scratch capture pose");preview.transform.SetParent(host.transform,false);
+            var offset=new Vector3(.02f,.04f,.08f);var rotation=Quaternion.Euler(25,-10,40);
+            preview.transform.SetPositionAndRotation(wrist.position+wrist.rotation*offset,wrist.rotation*rotation);
+            var captured=ToyControlSetupWindow.CapturePose(wrist,preview.transform);
+            var position=avatar.position;var turn=avatar.rotation;
+            avatar.SetPositionAndRotation(position+new Vector3(1.2f,.15f,-.4f),Quaternion.Euler(-38,100,40)*turn);
+            var moved=ToyControlSetupWindow.CapturePose(wrist,preview.transform);
+            check(Vector3.Distance(captured.position,offset)<.00001f && Quaternion.Angle(Quaternion.Euler(captured.rotation),rotation)<.01f && Vector3.Distance(moved.position,captured.position)<.00001f,"Pose capture preserves the adjusted placement across avatar position and rotation");
+            avatar.SetPositionAndRotation(position,turn);UnityEngine.Object.DestroyImmediate(preview);
+        }
         private static void VerifyPointers(GameObject host,Animator animator,Action<bool,string> check,string output)
         {
             var panel=host.transform.Find("Panel");var tracking=panel.Find("PoseTracking");var contacts=panel.Find("Size/Contacts");var hits=contacts.Find("PointerHits");var pointer=host.transform.Find("Pointer");
@@ -289,7 +344,7 @@ namespace ShockWave.ToyControl
             check(host.GetComponentsInChildren<VRCContactSender>(true).Length==4 && host.GetComponentsInChildren<VRCContactSender>(true).All(s=>s.localOnly),"Both hands encode two local-only pose points");
             var controller=(AnimatorController)animator.runtimeAnimatorController;
             var menu=AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(AssetDatabase.GetAssetPath(controller).Replace("FX.controller","Controls.asset"));
-            check(menu.controls.Select(c=>c.name).SequenceEqual(new[]{"Show panel","Follow right hand","Panel size"}),"Radial menu contains only the three requested controls");
+            check(menu.controls.Select(c=>c.name).SequenceEqual(new[]{"Show panel","In right hand","Back of right hand","Panel size"}),"Radial menu contains the two hand presets and requested display controls");
             check(Mathf.Abs(animator.GetFloat(ToyControlContract.Prefix+"Size")-.5f)<.001f,"Explicit radial setting survives movement checks");
             var anchor=host.transform.Find("HandAnchors/RightHandPosition").GetComponent<VRCParentConstraint>();
             check(anchor.AffectsRotationX && anchor.AffectsRotationY && anchor.AffectsRotationZ,"Follow right hand includes all rotation axes");

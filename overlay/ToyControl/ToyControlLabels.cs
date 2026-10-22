@@ -56,7 +56,8 @@ internal static class ToyControlLabels
             var row=model.Visible.ElementAt(i); var y=242+i*64;
             Text(row.Toy.Name,54,y,12,faint,width:208); Text(row.Function.Name,54,y+16,16,row.Function.Color,true,204);
             var mode=!row.Connected ? "Disconnected" : row.Function.LoopRunning ? "Looping" : row.Selected ? "Editing" : "Holding";
-            Text($"{mode} {row.Level*100:0}% · battery {(row.Toy.Battery<0 ? "?" : row.Toy.Battery+"%")}",54,y+37,11,faint,width:239);
+            var battery=row.Connected && row.Toy.Battery>=0 ? $" · battery {row.Toy.Battery}%" : "";
+            Text($"{mode} {row.Level*100:0}%{battery}",54,y+37,11,faint,width:239);
         }
         if(model.PageCount>1) { Text("‹",55,645,27,faint); Text("›",272,645,27,faint); Center($"{model.Page+1} / {model.PageCount}",new(112,648,134,36),13); }
         Text($"{model.Toys.Count} toys · {model.FunctionCount} functions",52,690,11,faint,width:260);

@@ -183,10 +183,12 @@ float4 frag(v2f input):SV_Target
         color=lerp(color,faint,statusText(p,float2(54,rect.y+38),flags));
         color=lerp(color,faint,number(p,float2(99,rect.y+38),(int)round(level*100),float2(5.8,14)));
         color=lerp(color,faint,glyph(p,float2(117,rect.y+38),float2(5.8,14),5));
-        color=lerp(color,faint,batteryText(p,float2(146,rect.y+38)));
         int battery=(int)round(rowBattery(row)*101)-1;
-        color=lerp(color,faint,battery<0 ? glyph(p,float2(205,rect.y+38),float2(5.8,14),31) : number(p,float2(189,rect.y+38),battery,float2(5.8,14)));
+        if(battery>=0 && connected>0.5) {
+        color=lerp(color,faint,batteryText(p,float2(146,rect.y+38)));
+        color=lerp(color,faint,number(p,float2(189,rect.y+38),battery,float2(5.8,14)));
         color=lerp(color,faint,glyph(p,float2(207,rect.y+38),float2(5.8,14),5));
+        }
         }
     }
     if(pages>1) { box(color,p,float4(40,648,52,36),8,muted); box(color,p,float4(256,648,52,36),8,muted); }

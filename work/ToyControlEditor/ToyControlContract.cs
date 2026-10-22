@@ -9,14 +9,14 @@ namespace ShockWave.ToyControl.Shared
     public static class ToyControlContract
     {
         public const string Prefix = "SzebsToy_", ReceivePrefix = "SzebsToy_Rx_";
-        public const int Version = 6, Rows = 7, BackgroundSlots = 16, LoopSamples = 32, CurveSamples = 64, NameChars = 18;
+        public const int Version = 7, Rows = 7, BackgroundSlots = 16, LoopSamples = 32, CurveSamples = 64, NameChars = 18;
         public const int DefaultReceivePort = 9001, DefaultSendPort = 9000;
         public const float MaximumCycles = 300;
         public static readonly string[] BoolInputs = {
             "Visible", "Follow", "Recall", "InBeat", "InTouch", "InRecord", "InPlay", "InHold", "InStop", "InClear",
             "InPrev", "InNext", "InOwn", "InRemote", "InBoth", "InTestTouch", "InFlipX", "InFlipY",
             "InRow0", "InRow1", "InRow2", "InRow3", "InRow4", "InRow5", "InRow6", "InInputMode", "InPointerLHit", "InPointerLPress", "InPointerRHit", "InPointerRPress", "InPage", "InPanelTouch", "InShockerReady",
-            "InPointerReady", "InPoseLOHit", "InPoseLTHit", "InPoseROHit", "InPoseRTHit"
+            "InPointerReady", "InPoseLOHit", "InPoseLTHit", "InPoseROHit", "InPoseRTHit", "InShockerBeat"
         };
         public static readonly string[] FloatInputs = { "InX", "InY", "InTestX", "InTestY", "InPointerLX", "InPointerLY", "InPointerRX", "InPointerRY", "InPanelX", "InPanelY",
             "InPoseLOX", "InPoseLOY", "InPoseLOZ", "InPoseLTX", "InPoseLTY", "InPoseLTZ", "InPoseROX", "InPoseROY", "InPoseROZ", "InPoseRTX", "InPoseRTY", "InPoseRTZ" };
