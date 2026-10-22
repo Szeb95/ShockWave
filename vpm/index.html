@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ShockWave — Avatar Panel</title>
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#1e2022;color:#f4f4f4}body{margin:0;min-height:100vh;display:grid;place-items:center}main{width:min(650px,calc(100% - 48px));padding:40px 0}h1{font-size:2.3rem;margin-bottom:12px}p,li{line-height:1.65;color:#c9ced2}a{color:#30cfb1}.button{display:inline-block;background:#087f6e;color:white;padding:14px 22px;border-radius:8px;text-decoration:none;font-weight:650;margin:12px 0}code{overflow-wrap:anywhere;font-size:.9rem}small{color:#aab2ba}footer{margin-top:32px;border-top:1px solid #3d4247;padding-top:16px}button{background:#34393f;color:white;border:1px solid #626970;border-radius:6px;padding:9px 14px;cursor:pointer}
+</style></head><body><main>
+<h1>ShockWave Avatar Panel</h1>
+<p>Add the avatar tools to VRChat Creator Companion. Use touch or either hand to point at your toys, patterns and shocker controls.</p>
+<a class="button" href="vcc://vpm/addRepo?url=https%3A%2F%2Fszeb95.github.io%2FShockWave%2Findex.json">Add to Creator Companion</a>
+<p>If the button does not open VCC, add this repository in <strong>Settings → Packages → Add Repository</strong>:</p>
+<p><code id="repo">https://szeb95.github.io/ShockWave/index.json</code></p><button id="copy" type="button">Copy repository URL</button><span id="copied" role="status"></span>
+<ol><li>Add the <a href="https://vcc.vrcfury.com/">official VRCFury repository</a> if it is not already available.</li><li>Open <strong>Manage Project</strong> in VCC and add <strong>ShockWave Avatar Panel</strong>. It requires the VRChat Avatars SDK and VRCFury.</li><li>In Unity open <strong>Tools → ShockWave → Panel</strong>. Choose your avatar and menu path, then explicitly add or update the panel.</li><li>Upload the avatar when ready. In VRChat use <strong>Show panel</strong> in your chosen menu. The panel starts hidden and the size defaults to 20%.</li></ol>
+<p>VCC updates the Editor tools. Existing avatars need an explicit <strong>Update Toy Control on Avatar</strong> and upload to receive panel changes. Updating the Windows app does not edit your Unity project.</p>
+<p>The package migrates only the old <code>Assets/Editor/SzebsToysToyControl</code> tool folder. Generated content under <code>Assets/SzebsToys</code> stays in place.</p>
+<footer><a href="https://github.com/Szeb95/ShockWave/releases/latest">Windows app</a> · <a href="https://github.com/Szeb95/ShockWave/blob/main/work/ToyControlEditor/README.md">Panel guide</a> · <a href="https://github.com/Szeb95/ShockWave">GitHub</a><p><small>Development preview. PC avatars only. Use ShockWave 0.7.9 or later with the new pointer. Headset accuracy still needs user testing.</small></p></footer>
+<script>document.getElementById('copy').onclick=async()=>{try{await navigator.clipboard.writeText(document.getElementById('repo').textContent);document.getElementById('copied').textContent=' Copied';}catch{document.getElementById('copied').textContent=' Select and copy the URL above.';}};</script>
+</main></body></html>

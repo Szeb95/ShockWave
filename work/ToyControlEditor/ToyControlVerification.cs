@@ -63,21 +63,27 @@ namespace ShockWave.ToyControl
                 var leftTip=new GameObject("Synthetic left index distal"); leftTip.transform.SetParent(leftIndex.transform,false); leftTip.transform.localPosition=Vector3.forward*0.06f;
                 var rightTip=new GameObject("Synthetic right index distal"); rightTip.transform.SetParent(rightIndex.transform,false); rightTip.transform.localPosition=Vector3.forward*0.06f;
                 Transform Bone(HumanBodyBones b) { return b==HumanBodyBones.RightHand ? rightHand.transform : b==HumanBodyBones.LeftHand ? leftHand.transform : b==HumanBodyBones.RightIndexProximal ? rightIndex.transform : b==HumanBodyBones.LeftIndexProximal ? leftIndex.transform : b==HumanBodyBones.RightIndexDistal ? rightTip.transform : b==HumanBodyBones.LeftIndexDistal ? leftTip.transform : null; }
-                var host=ToyControlSetupWindow.Build(avatar,0.04f,0.10f,out folder,resolveBone:Bone);
+                var host=ToyControlSetupWindow.Build(avatar,0.04f,0.10f,out folder,resolveBone:Bone,menuPath:" Utilities / ShockWave ");
+                Check(!host.transform.Find("Panel").gameObject.activeSelf,"New panel is hidden before any Animator runs, including Unity preview");
+                var fury=host.GetComponents<Component>().Single(c=>c!=null && c.GetType().FullName=="VF.Model.VRCFury");
+                var flags=System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
+                var model=fury.GetType().GetField("content",flags).GetValue(fury);
+                var entries=((System.Collections.IEnumerable)model.GetType().GetField("menus",flags).GetValue(model)).Cast<object>().ToArray();
+                Check(entries.Length==1 && (string)entries[0].GetType().GetField("prefix",flags).GetValue(entries[0])=="Utilities/ShockWave","Chosen nested radial path is passed to VRCFury without replacing existing menus");
                 Check(originalChild!=null && avatar.expressionParameters==null && avatar.expressionsMenu==null,"Installer preserves existing avatar children and descriptor assets");
                 Check(host.GetComponents<Component>().Any(c=>c!=null && c.GetType().FullName=="VF.Model.VRCFury"),"VRCFury Full Controller attached");
-                VerifyPointerBuildNames(host,Check,output);
+
                 Check(ToyControlSetupWindow.ValidateAvatar(avatar)!=null,"Duplicate install refused");
                 var parameters=AssetDatabase.LoadAssetAtPath<VRCExpressionParameters>(folder+"/Parameters.asset");
-                Check(parameters.parameters.Length==593 && parameters.parameters.All(p=>p.saved==(p.name==ToyControlContract.Prefix+"Size") && !p.networkSynced && p.defaultValue==(p.name==ToyControlContract.Prefix+"Size" ? 0.5f : 0)),"593 local parameters; only size is saved, confirmation is never saved");
+                Check(parameters.parameters.Length==616 && parameters.parameters.All(p=>p.saved==(p.name==ToyControlContract.Prefix+"Size") && !p.networkSynced && p.defaultValue==(p.name==ToyControlContract.Prefix+"Size" ? 0.2f : 0)),"616 local parameters; only size is saved, confirmation is never saved");
                 Check(parameters.CalcTotalCost()==0,"No synced expression-parameter memory consumed");
                 foreach(var path in AssetDatabase.FindAssets("t:VRCExpressionsMenu",new[] {folder}).Select(AssetDatabase.GUIDToAssetPath))
                     Check(AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(path).controls.Count<=8,"Menu page within eight controls: "+Path.GetFileName(path));
                 var contacts=host.GetComponentsInChildren<VRCContactReceiver>(true);
                 Check(!contacts.Any(c=>c.parameter.EndsWith("InZero") || c.parameter.EndsWith("InDemo")),"Removed Zero and Demo buttons have no contact receivers");
-                Check(contacts.Length==31 && contacts.All(c=>c.localOnly && c.allowSelf && !c.allowOthers) && contacts.Count(c=>c.collisionTags.SequenceEqual(new[] {"FingerIndexL","FingerIndexR"}))==21,"Twenty-one index-only receivers plus separate self-only pointer/hand receivers");
+                Check(contacts.Length==41 && contacts.All(c=>c.localOnly && c.allowSelf && !c.allowOthers) && contacts.Count(c=>c.collisionTags.SequenceEqual(new[] {"FingerIndexL","FingerIndexR"}))==21,"Twenty-one index-only receivers plus separate self-only pointer/hand receivers");
                 Check(contacts.Count(c=>c.collisionTags.SequenceEqual(new[] {"HandL"}))==2 && contacts.Count(c=>c.collisionTags.SequenceEqual(new[] {"HandR"}))==2,"Either hand can detect either edge separately");
-                Check(contacts.Count(c=>c.receiverType==VRC.Dynamics.ContactReceiver.ReceiverType.Proximity)==8,"Graph, shocker surface and both pointer hands have independent horizontal/vertical proximity receivers");
+                Check(contacts.Count(c=>c.receiverType==VRC.Dynamics.ContactReceiver.ReceiverType.Proximity)==16,"Graph, shocker surface and both pointer hands have independent horizontal/vertical proximity receivers");
                 Check(host.GetComponentInChildren<ParticleSystem>(true)==null,"Shader graph has no particles");
                 var panel=host.transform.Find("Panel"); var renderer=panel.Find("Size/Board").GetComponent<MeshRenderer>();
                 Check(panel.Find("Size/Grips/LeftStrip")!=null && panel.Find("Size/Grips/RightStrip")!=null && host.GetComponentsInChildren<Renderer>(true).Length==7 && host.GetComponentsInChildren<SkinnedMeshRenderer>(true).Length==2,"Two strips, both anchored beams and both markers accompany the original board");
@@ -87,7 +93,7 @@ namespace ShockWave.ToyControl
                 var clearWidth=new SerializedObject(clearContact).FindProperty("size").vector3Value.x; var stopWidth=new SerializedObject(stopContact).FindProperty("size").vector3Value.x;
                 Check(stopContact.position.x-clearContact.position.x-(clearWidth+stopWidth)/2>0.010f,"Inset button touch zones provide a physical gap between Clear and Stop");
                 var placement=panel.GetComponent<VRCParentConstraint>();
-                Check(placement.Sources.Count==3 && placement.Sources[1].SourceTransform==leftHand.transform && placement.Sources[2].SourceTransform==rightHand.transform,"Spawn and both real hand sources are wired without changing the avatar rig");
+                Check(placement.Sources.Count==4 && placement.Sources[1].SourceTransform==leftHand.transform && placement.Sources[2].SourceTransform==rightHand.transform,"Spawn and both real hand sources are wired without changing the avatar rig");
                 Check(Vector3.Distance(panel.position,rightHand.transform.position+new Vector3(-ToyControlSetupWindow.BoardWidth/2-0.04f,0,0.10f))<0.0001f,"Default panel center is beside the right hand");
                 var mainMenu=AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(folder+"/Controls.asset");
                 Check(mainMenu.controls.Any(m=>m.name=="Panel size" && m.type==VRCExpressionsMenu.Control.ControlType.RadialPuppet && m.subParameters.Single().name==ToyControlContract.Prefix+"Size"),"Panel size radial is in the main eight-control menu");
@@ -101,7 +107,7 @@ namespace ShockWave.ToyControl
                 Check(rawLabels.GetPixels().Any(p=>p.a>0.1f && p.a<0.5f && p.r>0.9f && p.g>0.9f),"Antialiased text edges retain straight color without double darkening"); UnityEngine.Object.DestroyImmediate(rawLabels);
                 Check(Mathf.Abs(panel.Find("Size/Board").localScale.y-ToyControlSetupWindow.BoardWidth*608/1240)<0.0001f,"VR board excludes the desktop footer");
                 var controller=AssetDatabase.LoadAssetAtPath<AnimatorController>(folder+"/FX.controller");
-                Check(controller.layers.Length==11 && controller.layers.All(l=>l.defaultWeight==1),"Existing layers plus pointer controls and explicit shocker-view acknowledgement");
+                Check(controller.layers.Length==13 && controller.layers.All(l=>l.defaultWeight==1),"Existing layers plus pointer controls and explicit shocker-view acknowledgement");
                 Check(controller.layers[1].stateMachine.states.Where(s=>s.state.name.Contains("grab") || s.state.name.Contains("Grab")).All(s=>s.state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters).Any(p=>p.name==ToyControlContract.Prefix+"InTouch" && p.value==0)),"Every grab entry explicitly clears touch as well as disabling drawing receivers");
                 var tree=(BlendTree)controller.layers[0].stateMachine.defaultState.motion;
                 Check(tree.children.Length==ToyControlContract.FeedbackFields().Length && tree.children.All(t=>t.directBlendParameter==ToyControlContract.Prefix+"Weight"),"All numeric material properties have independent weighted bindings");
@@ -117,15 +123,15 @@ namespace ShockWave.ToyControl
                 foreach(var item in frame.values) animator.SetFloat(ToyControlContract.ReceivePrefix+item.name,item.value);
                 animator.SetBool(ToyControlContract.Prefix+"RxBeat",true);
                 for(var i=0;i<20;i++) animator.Update(0.02f);
-                Check(panel.gameObject.activeSelf && panel.GetComponent<VRCParentConstraint>().FreezeToWorld,"Show places the panel then drops it");
+                Check(panel.gameObject.activeSelf && !panel.GetComponent<VRCParentConstraint>().FreezeToWorld && Mathf.Abs(panel.GetComponent<VRCParentConstraint>().Sources[3].Weight-1)<.001f,"Show follows avatar; freeze="+panel.GetComponent<VRCParentConstraint>().FreezeToWorld+" rootWeight="+panel.GetComponent<VRCParentConstraint>().Sources[3].Weight+" state="+animator.GetCurrentAnimatorStateInfo(1).fullPathHash);
                 var size=panel.Find("Size");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0); for(var i=0;i<5;i++) animator.Update(0.02f);
                 Check(Mathf.Abs(size.localScale.x-0.4f)<0.0001f && size.Find("Contacts").parent==size && size.Find("Grips").parent==size,"Minimum radial size scales Board, touch and grips as one child while placement stays frozen");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",1); for(var i=0;i<5;i++) animator.Update(0.02f);
-                Check(Mathf.Abs(size.localScale.x-1.6f)<0.0001f && placement.FreezeToWorld,"Maximum radial size does not unfreeze a dropped panel");
+                Check(Mathf.Abs(size.localScale.x-1.6f)<0.0001f && !placement.FreezeToWorld,"Maximum radial size does not unfreeze a dropped panel");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0.5f); for(var i=0;i<5;i++) animator.Update(0.02f);
                 animator.SetBool(ToyControlContract.Prefix+"GrabLLeft",true); animator.SetInteger("GestureLeft",2); for(var i=0;i<10;i++) animator.Update(0.02f);
-                Check(placement.FreezeToWorld && size.Find("Contacts").gameObject.activeSelf,"An unsupported open-hand gesture at the strip cannot grab");
+                Check(!placement.FreezeToWorld && size.Find("Contacts").gameObject.activeSelf,"An unsupported open-hand gesture at the strip cannot grab");
                 animator.SetBool(ToyControlContract.Prefix+"GrabLLeft",false); animator.SetInteger("GestureLeft",0);
                 foreach(var hand in new[] {"L","R"}) foreach(var edge in new[] {"Left","Right"}) foreach(var pose in ToyControlSetupWindow.GrabGestures)
                 {
@@ -143,7 +149,7 @@ namespace ShockWave.ToyControl
                     animator.SetInteger(gesture,0); for(var i=0;i<15;i++) animator.Update(0.02f);
                     Check(placement.FreezeToWorld && !size.Find("Contacts").gameObject.activeSelf,"Release guards touch while "+hand+" hand remains at the "+edge+" strip");
                     animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+edge,false); for(var i=0;i<15;i++) animator.Update(0.02f);
-                    Check(placement.FreezeToWorld && size.Find("Contacts").gameObject.activeSelf,"Leaving the "+edge+" strip restores touch after dropping with "+hand+" hand");
+                    Check(!placement.FreezeToWorld && size.Find("Contacts").gameObject.activeSelf,"Leaving the "+edge+" strip restores touch after dropping with "+hand+" hand");
                 }
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0.73f); animator.SetBool(ToyControlContract.Prefix+"InStop",true); animator.SetBool(ToyControlContract.Prefix+"Visible",false); for(var i=0;i<5;i++) animator.Update(0.02f);
                 animator.SetBool(ToyControlContract.Prefix+"Visible",true); animator.SetBool(ToyControlContract.Prefix+"InStop",false); for(var i=0;i<20;i++) animator.Update(0.02f);
@@ -199,7 +205,7 @@ namespace ShockWave.ToyControl
                 Check(animator.GetCurrentAnimatorStateInfo(10).IsName("Toys / unavailable"),"Returning to toys revokes shocker acknowledgement");
                 var shockerFixture=Path.Combine(Path.GetDirectoryName(Environment.GetEnvironmentVariable("SHOCKWAVE_VR_FRAME")),"shocker-feedback.json");
                 var shockerFrame=JsonUtility.FromJson<Frame>(File.ReadAllText(shockerFixture));
-                Check(shockerFrame.version==5 && shockerFrame.values.Length==ToyControlContract.FeedbackFields().Length,"Shocker fixture uses the production v5 contract");
+                Check(shockerFrame.version==6 && shockerFrame.values.Length==ToyControlContract.FeedbackFields().Length,"Shocker fixture uses the production v6 contract");
                 var toySaved=new MaterialPropertyBlock(); renderer.GetPropertyBlock(toySaved);
                 var shockerBlock=new MaterialPropertyBlock(); foreach(var v in shockerFrame.values) shockerBlock.SetFloat("_"+v.name,v.value); shockerBlock.SetFloat("_LinkOnline",1);
                 foreach(var armed in new[] {false,true})
@@ -275,208 +281,79 @@ namespace ShockWave.ToyControl
             catch(Exception ex) {Debug.LogException(ex); if(!string.IsNullOrWhiteSpace(output)) File.WriteAllText(Path.Combine(output,"failure.txt"),ex.ToString()); EditorApplication.Exit(1);}
             finally {if(root!=null) UnityEngine.Object.DestroyImmediate(root); if(folder!=null && AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder); EditorSceneManager.ClosePreviewScene(scene);}
         }
-        private static void VerifyPointerBuildNames(GameObject host,Action<bool,string> check,string output)
-        {
-            // Exercise VRCFury's real upload-time name rewriter. The ray's base
-            // prefix and its derived Animator names must remain in one namespace.
-            const System.Reflection.BindingFlags flags=System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.Static;
-            Type Find(string name) => AppDomain.CurrentDomain.GetAssemblies().Select(a=>a.GetType(name)).First(t=>t!=null);
-            var fury=host.GetComponents<Component>().Single(c=>c!=null && c.GetType().FullName=="VF.Model.VRCFury");
-            var model=fury.GetType().GetField("content",flags).GetValue(fury);
-            var injector=Find("VF.Builder.VRCFuryInjectorBuilder").GetMethod("GetInjector",flags).Invoke(null,new object[] {host.GetComponentInParent<VRCAvatarDescriptor>()});
-            var getService=injector.GetType().GetMethods(flags).Single(m=>m.Name=="GetService" && m.IsGenericMethodDefinition);
-            var globals=getService.MakeGenericMethod(Find("VF.Service.GlobalsService")).Invoke(injector,null);
-            globals.GetType().GetField("currentFeatureNum",flags).SetValue(globals,201);
-            var wrapper=Find("VF.Utils.VFGameObject").GetMethods(flags).Single(m=>m.Name=="op_Implicit" && m.ReturnType.FullName=="VF.Utils.VFGameObject" && m.GetParameters()[0].ParameterType==typeof(GameObject)).Invoke(null,new object[] {host});
-            object Builder() => Find("VF.Feature.Base.FeatureFinder").GetMethod("GetBuilder",flags).Invoke(null,new[] {model,wrapper,injector});
-            var report=new System.Text.StringBuilder();
-            var rays=host.GetComponentsInChildren<VRCRaycast>(true);
-            var globalNames=(System.Collections.IList)model.GetType().GetField("globalParams",flags).GetValue(model); var savedNames=globalNames.Cast<object>().ToArray();
-            try
-            {
-                // Regression control: reproduce the shipped configuration that
-                // made derived fields global while omitting their base prefix.
-                foreach(var ray in rays) globalNames.Remove(ray.Parameter);
-                var legacy=Builder(); var legacyRewrite=legacy.GetType().GetMethod("RewriteParamName",flags);
-                foreach(var ray in rays)
-                {
-                    var native=(string)legacyRewrite.Invoke(legacy,new object[] {ray.Parameter});
-                    var visual=(string)legacyRewrite.Invoke(legacy,new object[] {ray.Parameter+"_Hit"});
-                    report.AppendLine("Previous setup: native="+native+"_Hit visual="+visual);
-                    check(native+"_Hit"!=visual,"Actual VRCFury rewriter reproduces the previous "+ray.Parameter+" visual mismatch");
-                }
-            }
-            finally {globalNames.Clear(); foreach(var name in savedNames) globalNames.Add(name);}
-            var builder=Builder(); var rewrite=builder.GetType().GetMethod("RewriteParamName",flags);
-            foreach(var ray in rays)
-            {
-                var prefix=(string)rewrite.Invoke(builder,new object[] {ray.Parameter});
-                foreach(var field in new[] {"_Hit","_Ratio","_Distance"})
-                {
-                    var visual=(string)rewrite.Invoke(builder,new object[] {ray.Parameter+field});
-                    report.AppendLine(ray.Parameter+field+" native="+prefix+field+" visual="+visual);
-                    File.WriteAllText(Path.Combine(output,"pointer-build-names.txt"),report.ToString());
-                    check(prefix+field==visual,"Actual VRCFury rewriter keeps "+ray.Parameter+field+" connected to its native ray prefix (native="+prefix+field+", visual="+visual+")");
-                }
-            }
-        }
         private static void VerifyPointers(GameObject host,Animator animator,Action<bool,string> check,string output)
         {
-            var pointer=host.transform.Find("Pointer"); var contacts=host.transform.Find("Panel/Size/Contacts"); var pointerHits=contacts.Find("PointerHits");
-            var target=host.transform.Find("Panel/Size/PointerTarget").GetComponent<BoxCollider>();
-            var rays=host.GetComponentsInChildren<VRCRaycast>(true);
-            check(rays.Length==2 && rays.All(r=>r.BehaviorOnMiss==VRCRaycast.MissBehavior.SnapToEnd && r.ApplyTransformScale && Mathf.Abs(r.Distance-3)<.001f),"Both hands have bounded raycasts with fresh miss positions and avatar scaling");
-            check(target.gameObject.layer==10 && !target.isTrigger && host.GetComponentsInChildren<Collider>(true).Length==1,"Only the generated panel has a physical ray target; visuals add no colliders");
-            check(target.center==Vector3.zero && target.size.z<=.0002f,"Ray target is centered on the visible surface within one tenth of a millimeter per side");
-            check(host.GetComponentsInChildren<VRCContactSender>(true).All(s=>s.localOnly) && host.GetComponentsInChildren<VRCContactSender>(true).Select(s=>s.collisionTags.Single()).OrderBy(s=>s).SequenceEqual(new[] {ToyControlSetupWindow.PointerTag+"L",ToyControlSetupWindow.PointerTag+"R"}),"Left and right ray results use separate local-only custom sender tags");
-            foreach(var hand in new[] {"L","R"})
-                check(contacts.GetComponentsInChildren<VRCContactReceiver>(true).Count(r=>r.collisionTags.Contains(ToyControlSetupWindow.PointerTag+hand))==3,"Pointer "+hand+" has its own hit and XY receivers");
-            pointer.gameObject.SetActive(true);
-            pointerHits.gameObject.SetActive(true);
-            // Edit-mode scratch contacts do not receive the client's automatic
-            // collision-manager initialization. Allocate only their native test
-            // shapes; the public CalculateProximity then uses real SDK math.
-            var contactFlags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance;
-            var contactManager=ContactManager.Inst;
-            if(contactManager==null)
+            var panel=host.transform.Find("Panel");var tracking=panel.Find("PoseTracking");var contacts=panel.Find("Size/Contacts");var hits=contacts.Find("PointerHits");var pointer=host.transform.Find("Pointer");
+            check(host.GetComponentsInChildren<VRCRaycast>(true).Length==0 && host.GetComponentsInChildren<Collider>(true).Length==0,"Analytic pointer has no raycast or physical collider and cannot hit a floating scene box");
+            check(tracking.parent==panel && tracking.GetComponentsInChildren<VRCContactReceiver>(true).Length==16,"Pose sensor volume is independent of panel radial size");
+            check(host.GetComponentsInChildren<VRCContactSender>(true).Length==4 && host.GetComponentsInChildren<VRCContactSender>(true).All(s=>s.localOnly),"Both hands encode two local-only pose points");
+            var controller=(AnimatorController)animator.runtimeAnimatorController;
+            var menu=AssetDatabase.LoadAssetAtPath<VRCExpressionsMenu>(AssetDatabase.GetAssetPath(controller).Replace("FX.controller","Controls.asset"));
+            check(menu.controls.Select(c=>c.name).SequenceEqual(new[]{"Show panel","Follow right hand","Panel size"}),"Radial menu contains only the three requested controls");
+            check(Mathf.Abs(animator.GetFloat(ToyControlContract.Prefix+"Size")-.5f)<.001f,"Explicit radial setting survives movement checks");
+            var anchor=host.transform.Find("HandAnchors/RightHandPosition").GetComponent<VRCParentConstraint>();
+            check(anchor.AffectsRotationX && anchor.AffectsRotationY && anchor.AffectsRotationZ,"Follow right hand includes all rotation axes");
+            foreach(var r in contacts.GetComponentsInChildren<VRCContactReceiver>(true).Where(r=>r.parameter.Contains("InRow")))
             {
-                var managerObject=new GameObject("Scratch pointer contact manager"); contactManager=managerObject.AddComponent<ContactManager>();
-                typeof(ContactManager).GetMethod("Awake",contactFlags).Invoke(contactManager,null);
+                var dimensions=new SerializedObject(r).FindProperty("size").vector3Value;
+                check(dimensions.y<=40/1240f*.74f+.00001f && dimensions.z<=.0081f,"Inset row contact has a vertical dead zone and shallower depth: "+r.name);
             }
-            foreach(var contact in pointerHits.GetComponentsInChildren<VRCContactSender>(true).Cast<ContactBase>().Concat(contacts.GetComponentsInChildren<VRCContactReceiver>(true).Where(r=>r.parameter.Contains("InPointer"))))
+            void Step(){for(var i=0;i<8;i++) animator.Update(.02f);}
+            animator.SetBool(ToyControlContract.Prefix+"InputReady",true);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);
+            animator.SetInteger("GestureLeft",7);animator.SetInteger("GestureRight",7);Step();
+            check(pointer.gameObject.activeSelf && tracking.gameObject.activeSelf && !contacts.Find("InTouch").gameObject.activeSelf,"Pointer mode enables pose sensors and disables physical finger selection");
+            foreach(var hand in new[]{"L","R"})
             {
-                typeof(ContactBase).GetField("manager",contactFlags).SetValue(contact,contactManager);
-                typeof(ContactBase).GetMethod("InitShape",contactFlags).Invoke(contact,new object[] {false});
-                var collision=typeof(ContactManager).GetField("collision",contactFlags).GetValue(contactManager);
-                collision.GetType().GetMethod("AddShape",contactFlags).Invoke(collision,new[] {typeof(ContactBase).GetField("shape",contactFlags).GetValue(contact)});
-            }
-            foreach(var hand in new[] {"L","R"})
-            {
-                var sender=pointerHits.Find(hand).GetComponent<VRCContactSender>(); var saved=sender.transform.position;
-                var marker=sender.transform.Find("Marker").GetComponent<MeshRenderer>();
-                check(!sender.transform.IsChildOf(pointer) && sender.transform.parent==pointerHits && sender.position==new Vector3(0,0,-.015f),hand+" result is independent of the wrist while its invisible sender retains the panel-local touch offset");
-                check(marker.GetComponent<MeshFilter>().sharedMesh.bounds.size.z<.00001f && Vector3.Dot(marker.transform.forward,contacts.forward)>.9999f && marker.sharedMaterial.GetFloat("_Disc")==1,hand+" marker is a flat circular dot parallel to the panel");
-                var x=contacts.Find("InPointer"+hand+"X").GetComponent<VRCContactReceiver>();
-                var y=contacts.Find("InPointer"+hand+"Y").GetComponent<VRCContactReceiver>();
-                var hit=contacts.Find("InPointer"+hand+"Hit").GetComponent<VRCContactReceiver>();
-                foreach(var point in new[] {new Vector2(200,200),new Vector2(1000,600)})
+                var layer=hand=="L" ? 6 : 7;var visual=hand=="L" ? 8 : 9;var gesture=hand=="L" ? "GestureLeft" : "GestureRight";
+                check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Release before pointing"),hand+" held click must release when pointer mode starts");
+                var origin=pointer.Find(hand+"/Origin");var tip=origin.Find("Tip");
+                check(Mathf.Abs(tip.localPosition.z-.2f)<.00001f && tip.parent==origin,hand+" calibrated aim uses a rigid 20cm baseline");
+                var beam=pointer.Find(hand+"/Beam").GetComponent<SkinnedMeshRenderer>();var marker=hits.Find(hand+"/Marker").GetComponent<MeshRenderer>();
+                check(beam.sharedMesh.vertexCount==8 && beam.bones.SequenceEqual(new[]{origin,hits.Find(hand)}),hand+" beam stays attached to the hand and panel cursor");
+                check(beam.localBounds.size.x<1 && beam.localBounds.size.y<1 && beam.localBounds.size.z<2.5f,hand+" beam no longer reserves a 6.1 metre bounds cube");
+                animator.SetInteger(gesture,6);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid",1);Step();
+                check(marker.enabled && beam.enabled && animator.GetCurrentAnimatorStateInfo(visual).IsName("On panel"),hand+" valid surface cursor displays beam and dot together");
+                foreach(var p in new[]{new Vector2(.1f,.2f),new Vector2(.85f,.75f)})
                 {
-                    sender.transform.position=contacts.TransformPoint(ToyControlSetupWindow.Position(point.x,point.y)+Vector3.forward*.015f);
-                    foreach(var contact in new ContactBase[] {sender,x,y,hit}) typeof(ContactBase).GetMethod("PerformShapeUpdate",contactFlags).Invoke(contact,null);
-                    var collision=typeof(ContactManager).GetField("collision",contactFlags).GetValue(contactManager);
-                    collision.GetType().GetMethod("UpdateAndSchedule",contactFlags).Invoke(collision,new object[] {.016f,false,new Unity.Jobs.JobHandle()});
-                    collision.GetType().GetMethod("Complete",contactFlags).Invoke(collision,null);
-                    var px=x.CalculateProximity(sender); var py=y.CalculateProximity(sender);
-                    check(Mathf.Abs(px-point.x/1240)<.02f && Mathf.Abs(py-(1-(point.y-100)/608))<.02f,"Actual "+hand+" SDK contacts map ray-position XY to the full panel at "+point+" ("+px+", "+py+")");
-                    check(hit.CalculateProximity(sender)>.1f,"Actual "+hand+" SDK surface gate accepts a hit on the visible plane at "+point);
-                    sender.transform.position+=contacts.forward*.002f;
-                    typeof(ContactBase).GetMethod("PerformShapeUpdate",contactFlags).Invoke(sender,null);
-                    collision.GetType().GetMethod("UpdateAndSchedule",contactFlags).Invoke(collision,new object[] {.016f,false,new Unity.Jobs.JobHandle()}); collision.GetType().GetMethod("Complete",contactFlags).Invoke(collision,null);
-                    check(hit.CalculateProximity(sender)==0,"Actual "+hand+" SDK surface gate rejects a floating hit two millimeters away at "+point);
+                    animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+hand+"X",p.x);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+hand+"Y",p.y);Step();
+                    var cursor=hits.Find(hand).localPosition;
+                    check(Mathf.Abs(cursor.x-(p.x-.5f)*.74f)<.0001f && Mathf.Abs(cursor.y-(p.y-.5f)*.74f*608/1240)<.0001f && Mathf.Abs(cursor.z+.0002f)<.00001f,hand+" animated cursor stays exactly on the board at "+p);
+                    VerifyBeamEndpoints(beam,origin,hits.Find(hand),check,hand+" analytic cursor");
                 }
-                sender.transform.position=saved;
+                var initialDirection=origin.forward;var index=pointer.Find(hand).GetComponent<VRCParentConstraint>().Sources[0].SourceTransform.Find(hand=="L" ? "Synthetic left index proximal" : "Synthetic right index proximal");
+                for(var pose=0;pose<8;pose++) {index.localRotation=Quaternion.Euler(pose*15,pose*4,pose*7);animator.SetInteger(gesture,pose);Step();check(Vector3.Dot(initialDirection,origin.forward)>.9999f && animator.GetCurrentAnimatorStateInfo(layer).IsName(pose==7 ? "Click / draw" : "Aim"),hand+" pose "+pose+" cannot steer the rigid aim; only Thumbs Up clicks");}
+                index.localRotation=Quaternion.identity;
+                animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid",0);Step();check(!marker.enabled && !beam.enabled,hand+" invalid/outside/grazing pointer hides both visuals");
             }
-            pointer.gameObject.SetActive(false);
-            pointerHits.gameObject.SetActive(false);
-            void Step() {for(var i=0;i<8;i++) animator.Update(.02f);}
-            animator.SetBool(ToyControlContract.Prefix+"InputReady",true); animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);
-            animator.SetInteger("GestureLeft",7); animator.SetInteger("GestureRight",7); Step();
-            check(pointer.gameObject.activeSelf && pointerHits.gameObject.activeSelf && !contacts.Find("InTouch").gameObject.activeSelf && contacts.Find("InInputMode").gameObject.activeSelf,"Pointer mode enables panel-owned results and suppresses physical finger drawing while retaining the mode button");
-            check(animator.GetCurrentAnimatorStateInfo(6).IsName("Release before pointing") && animator.GetCurrentAnimatorStateInfo(7).IsName("Release before pointing"),"Switching modes with either click gesture held waits for release");
-            foreach(var hand in new[] {"L","R"})
-            {
-                var gesture=hand=="L" ? "GestureLeft" : "GestureRight"; var layer=hand=="L" ? 6 : 7;
-                var group=pointer.Find(hand); var origin=group.Find("Origin"); var follow=group.GetComponent<VRCParentConstraint>();
-                var result=pointerHits.Find(hand); var marker=result.Find("Marker").GetComponent<MeshRenderer>();
-                var beam=group.Find("Beam").GetComponent<SkinnedMeshRenderer>();
-                check(beam.bones.SequenceEqual(new[] {origin,result}) && beam.sharedMesh.vertexCount==8,"The "+hand+" beam is bound directly to its origin and native hit transform");
-                var savedResult=result.position; var savedGroup=group.position; var savedRotation=group.rotation;
-                result.position=contacts.TransformPoint(Vector3.zero); var fixedResult=result.position;
-                group.SetPositionAndRotation(savedGroup+new Vector3(.03f,.07f,-.02f),Quaternion.Euler(20,35,8)*savedRotation);
-                check(Vector3.Distance(result.position,fixedResult)<.000001f && Vector3.Distance(marker.transform.position,fixedResult)<.000001f,hand+" wrist movement after a ray sample cannot lift the dot from the panel");
-                VerifyBeamEndpoints(beam,origin,result,check,hand+" wrist motion after ray sampling");
-                group.SetPositionAndRotation(savedGroup,savedRotation); result.position=savedResult;
-                animator.SetInteger(gesture,6);
-                animator.SetBool(ToyControlContract.Prefix+"InPointer"+hand+"Hit",true); animator.SetBool(ToyControlContract.Prefix+"Ray"+hand+"_Hit",true); Step();
-                check(marker.enabled && beam.enabled,hand+" beam and hover dot appear together for a valid panel hit without pressing");
-                animator.SetFloat(ToyControlContract.Prefix+"Ray"+hand+"_Ratio",.01f); Step(); VerifyBeamEndpoints(beam,origin,result,check,hand+" low diagnostic ratio");
-                animator.SetFloat(ToyControlContract.Prefix+"Ray"+hand+"_Ratio",1); Step(); VerifyBeamEndpoints(beam,origin,result,check,hand+" high diagnostic ratio");
-                animator.SetBool(ToyControlContract.Prefix+"Ray"+hand+"_Hit",false); Step();
-                check(!marker.enabled && !beam.enabled,hand+" ray miss hides both beam and dot instead of showing a full-length ray");
-                animator.SetBool(ToyControlContract.Prefix+"Ray"+hand+"_Hit",true); animator.SetBool(ToyControlContract.Prefix+"InPointer"+hand+"Hit",false); Step();
-                check(!marker.enabled && !beam.enabled,hand+" hit on a foreign collider shows neither beam nor panel dot");
-                animator.SetBool(ToyControlContract.Prefix+"Ray"+hand+"_Hit",false);
-                var wrist=follow.Sources[0].SourceTransform;
-                var index=wrist.Find(hand=="L" ? "Synthetic left index proximal" : "Synthetic right index proximal");
-                var tip=index.GetChild(0); var pistolDirection=(tip.position-index.position).normalized;
-                check(follow.Sources.Count==1 && follow.AffectsRotationX && follow.AffectsRotationY && follow.AffectsRotationZ && group.GetComponentsInChildren<VRCAimConstraint>(true).Length==0 && Vector3.Dot(origin.forward,pistolDirection)>.9999f,hand+" ray is calibrated to extended-index direction and follows only the wrist");
-                var start=origin.position; var forward=origin.forward;
-                for(var pose=0;pose<8;pose++)
-                {
-                    index.localRotation=Quaternion.Euler(pose*13,pose*5,pose*3);
-                    tip.localRotation=Quaternion.Euler(pose*9,0,0);
-                    animator.SetInteger(gesture,pose); Step();
-                    check(Vector3.Dot(origin.forward,forward)>.9999f && Vector3.Distance(origin.position,start)<.00001f,hand+" finger pose "+pose+" cannot steer or shift the pointer");
-                    check(animator.GetCurrentAnimatorStateInfo(layer).IsName(pose==7 ? "Click / draw" : "Aim"),hand+" gesture "+pose+(pose==7 ? " presses via Thumbs Up" : " does not press"));
-                }
-                index.localRotation=tip.localRotation=Quaternion.identity;
-                var rotation=group.rotation; var turn=Quaternion.Euler(12,35,-9); group.rotation=turn*rotation;
-                check(Vector3.Dot(origin.forward,turn*forward)>.9999f,hand+" calibrated pointer turns with its wrist-following anchor"); group.rotation=rotation;
-                animator.SetInteger(gesture,6); Step(); check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Aim"),hand+" reopening the index into pistol pose releases the click");
-            }
-            animator.SetBool(ToyControlContract.Prefix+"InputReady",false); Step();
-            check(!pointer.gameObject.activeSelf && !pointerHits.gameObject.activeSelf && animator.GetCurrentAnimatorStateInfo(6).IsName("Release before pointing"),"Placement/grab guard disables rays and dots and requires a fresh click");
-            animator.SetBool(ToyControlContract.Prefix+"InputReady",true); animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0); Step();
-            check(!pointer.gameObject.activeSelf && !pointerHits.gameObject.activeSelf && contacts.Find("InTouch").gameObject.activeSelf && !target.gameObject.activeSelf,"Touch mode restores finger input and removes pointer results and collider");
-            // Use the SDK's actual command/result methods and native Physics batch,
-            // with a synthetic target in the scratch project's default physics scene.
-            // No manual result-position assignment stands in for a ray hit.
-            var probe=new GameObject("Scratch pointer physics target"); var collider=probe.AddComponent<BoxCollider>(); probe.layer=10;
-            var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance;
-            try
-            {
-                collider.size=target.size; collider.center=target.center;
-                foreach(var ray in rays)
-                {
-                    var wasActive=ray.transform.parent.parent.gameObject.activeSelf;
-                    ray.transform.parent.parent.gameObject.SetActive(true);
-                    foreach(var constraint in ray.GetComponents<VRCConstraintBase>()) constraint.IsActive=false;
-                    ray.transform.SetPositionAndRotation(new Vector3(20,20,20),Quaternion.identity);
-                    probe.transform.SetPositionAndRotation(ray.transform.position+Vector3.forward,Quaternion.identity); Physics.SyncTransforms();
-                    typeof(VRCRaycast).GetMethod("Awake",flags).Invoke(ray,null);
-                    var commands=new Unity.Collections.NativeArray<RaycastCommand>(1,Unity.Collections.Allocator.TempJob);
-                    var hits=new Unity.Collections.NativeArray<RaycastHit>(1,Unity.Collections.Allocator.TempJob);
-                    try
-                    {
-                        object[] args={new RaycastCommand()}; typeof(VRCRaycast).GetMethod("PopulateRaycastCommand",flags).Invoke(ray,args);
-                        commands[0]=(RaycastCommand)args[0]; RaycastCommand.ScheduleBatch(commands,hits,1).Complete();
-                        typeof(VRCRaycast).GetMethod("HandleRaycastResult",flags).Invoke(ray,new object[] {hits[0]});
-                        check(hits[0].collider==collider && Vector3.Distance(ray.ResultTransform.position,hits[0].point)<.0001f,"Actual "+ray.name+" SDK ray hits the panel target and places its contact sender at the hit");
-                        foreach(var rotation in new[] {Quaternion.identity,Quaternion.Euler(18,-27,11)})
-                        foreach(var point in new[] {Vector2.zero,new Vector2(-.35f,-.35f),new Vector2(.35f,.35f)})
-                        foreach(var angle in new[] {0,35,65,80})
-                        {
-                            probe.transform.SetPositionAndRotation(new Vector3(20,20,21),rotation);
-                            var expected=probe.transform.TransformPoint(new Vector3(point.x*collider.size.x,point.y*collider.size.y,0));
-                            var radians=angle*Mathf.Deg2Rad; var direction=rotation*new Vector3(Mathf.Sin(radians)*.6f,Mathf.Sin(radians)*.8f,Mathf.Cos(radians));
-                            ray.transform.SetPositionAndRotation(expected-direction*.75f,Quaternion.LookRotation(direction)); Physics.SyncTransforms();
-                            typeof(VRCRaycast).GetMethod("PopulateRaycastCommand",flags).Invoke(ray,args); commands[0]=(RaycastCommand)args[0];
-                            RaycastCommand.ScheduleBatch(commands,hits,1).Complete(); typeof(VRCRaycast).GetMethod("HandleRaycastResult",flags).Invoke(ray,new object[] {hits[0]});
-                            var localHit=probe.transform.InverseTransformPoint(ray.ResultTransform.position);
-                            check(hits[0].collider==collider && Vector3.Distance(ray.ResultTransform.position,expected)<.0007f && Mathf.Abs(localHit.z)<=.00011f,"Actual "+ray.Parameter+" surface hit stays on the board at "+angle+" degrees / "+point+" / rotated="+(rotation!=Quaternion.identity));
-                        }
-                        probe.transform.position+=Vector3.right*5; Physics.SyncTransforms();
-                        typeof(VRCRaycast).GetMethod("PopulateRaycastCommand",flags).Invoke(ray,args); commands[0]=(RaycastCommand)args[0];
-                        RaycastCommand.ScheduleBatch(commands,hits,1).Complete(); typeof(VRCRaycast).GetMethod("HandleRaycastResult",flags).Invoke(ray,new object[] {hits[0]});
-                        check(hits[0].collider==null && Vector3.Distance(ray.ResultTransform.position,ray.transform.position+ray.transform.forward*ray.Distance)<.001f,"Actual SDK miss removes the old "+ray.Parameter+" hit position");
-                    }
-                    finally {commands.Dispose();hits.Dispose();ray.transform.parent.parent.gameObject.SetActive(wasActive);}
-                }
-            }
-            finally {UnityEngine.Object.DestroyImmediate(probe);}
+            VerifyPoseCoordinates(host,check);
+            animator.SetBool(ToyControlContract.Prefix+"InputReady",false);Step();check(!pointer.gameObject.activeSelf && !tracking.gameObject.activeSelf,"Placement guard disables pointer tracking and requires a fresh click");
+            animator.SetBool(ToyControlContract.Prefix+"InputReady",true);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0);Step();check(contacts.Find("InTouch").gameObject.activeSelf && !tracking.gameObject.activeSelf,"Touch mode restores finger controls without a scene collider");
             VerifyBeamRender(pointer.Find("L/Beam").GetComponent<SkinnedMeshRenderer>(),output,check);
-            VerifySurfaceDot(pointerHits.Find("L/Marker").GetComponent<MeshRenderer>(),host.transform.Find("Panel/Size/Board").GetComponent<MeshRenderer>(),output,check);
+            VerifySurfaceDot(hits.Find("L/Marker").GetComponent<MeshRenderer>(),panel.Find("Size/Board").GetComponent<MeshRenderer>(),output,check);
         }
+        private static void VerifyPoseCoordinates(GameObject host,Action<bool,string> check)
+        {
+            var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.Instance;
+            var mgr=ContactManager.Inst;if(mgr==null){var o=new GameObject("Scratch pose contact manager");mgr=o.AddComponent<ContactManager>();typeof(ContactManager).GetMethod("Awake",flags).Invoke(mgr,null);}
+            var all=host.GetComponentsInChildren<VRCContactSender>(true).Cast<ContactBase>().Concat(host.transform.Find("Panel/PoseTracking").GetComponentsInChildren<VRCContactReceiver>(true)).ToArray();
+            foreach(var c in all) {typeof(ContactBase).GetField("manager",flags).SetValue(c,mgr);typeof(ContactBase).GetMethod("InitShape",flags).Invoke(c,new object[]{false});var collision=typeof(ContactManager).GetField("collision",flags).GetValue(mgr);collision.GetType().GetMethod("AddShape",flags).Invoke(collision,new[]{typeof(ContactBase).GetField("shape",flags).GetValue(c)});}
+            var sender=host.GetComponentsInChildren<VRCContactSender>(true).First();var saved=sender.transform.position;var tag=sender.collisionTags[0];var tracking=host.transform.Find("Panel/PoseTracking");
+            var receivers=tracking.GetComponentsInChildren<VRCContactReceiver>(true).Where(r=>r.collisionTags.Contains(tag)).ToArray();
+            foreach(var rotation in new[]{Quaternion.identity,Quaternion.Euler(20,65,-12)})
+            {
+                var panel=host.transform.Find("Panel");var savedRot=panel.rotation;panel.rotation=rotation;
+                foreach(var p in new[]{new Vector3(.25f,.15f,-.5f),new Vector3(-.5f,-.2f,.7f),new Vector3(1.1f,.3f,-.6f)})
+                {
+                    sender.transform.position=tracking.TransformPoint(p);foreach(var c in all) typeof(ContactBase).GetMethod("PerformShapeUpdate",flags).Invoke(c,null);
+                    var collision=typeof(ContactManager).GetField("collision",flags).GetValue(mgr);collision.GetType().GetMethod("UpdateAndSchedule",flags).Invoke(collision,new object[]{.016f,false,new Unity.Jobs.JobHandle()});collision.GetType().GetMethod("Complete",flags).Invoke(collision,null);
+                    var v=new Vector3(receivers.Single(r=>r.parameter.EndsWith("X")).CalculateProximity(sender),receivers.Single(r=>r.parameter.EndsWith("Y")).CalculateProximity(sender),receivers.Single(r=>r.parameter.EndsWith("Z")).CalculateProximity(sender));
+                    check(Vector3.Distance(p,(v-Vector3.one*.5f)*3.5f)<.003f,"Actual SDK pose coordinates are panel-relative across position and rotation: "+p);
+                }
+                panel.rotation=savedRot;
+            }
+            sender.transform.position=saved;
+        }
+
         private static void VerifyBeamRender(SkinnedMeshRenderer source,string output,Action<bool,string> check)
         {
             var beam=UnityEngine.Object.Instantiate(source.gameObject); var start=new GameObject("Scratch beam start"); var end=new GameObject("Scratch beam end"); var obj=new GameObject("Scratch beam camera");

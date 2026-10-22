@@ -24,7 +24,7 @@ internal static class Program
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); artifacts=args.FirstOrDefault(a=>!a.StartsWith("--")) ?? Path.Combine(AppContext.BaseDirectory,"checks"); Directory.CreateDirectory(artifacts);
         try
         {
-            LatchedRecord(); Leases(); HeldRenewals(); ZeroCrossings(); OwnerEditDuringZero(); FailedZero(); SixFunctions(); Session(); RowContacts(); LateStartup(); Pointer(); Udp(); Heartbeats(); ClearFeedback(); Graphics(args.Contains("--warp")); Design(args.Contains("--warp")); Navigation();
+            LatchedRecord(); Leases(); HeldRenewals(); ZeroCrossings(); OwnerEditDuringZero(); FailedZero(); SixFunctions(); Session(); RowContacts(); LateStartup(); Projection(); Pointer(); Udp(); Heartbeats(); ClearFeedback(); Graphics(args.Contains("--warp")); Design(args.Contains("--warp")); Navigation();
             ShockerControlChecks.Run(Check,artifacts,args.Contains("--warp"));
             File.WriteAllText(Path.Combine(artifacts,"report.json"),JsonSerializer.Serialize(new { Passed=passed, PhysicalOutput=false, NativeLibraryLoaded=false, VrChatClient=false }));
             Console.WriteLine($"Toy control: {passed} checks passed"); return 0;
@@ -106,6 +106,28 @@ internal static class Program
         Check(s.Model.Functions.First().Selected && f.Controller.State("fixture","v1").RequestedPercent==63,"brief row contact bounce while moving to draw cannot deselect the function");
         Put("InTouch",false); Put("InRow0",false); s.Tick(now); now+=.3; Put("InRow0",true); s.Tick(now);
         Check(!s.Model.Functions.First().Selected && f.Controller.State("fixture","v1").RequestedPercent==63,"leaving the row then touching it again deliberately deselects while preserving the held value");
+        Put("InRow1",true);s.Tick(now);
+        Check(!s.Model.Functions.Last().Selected,"touching the neighbour during the same finger contact cannot toggle it");
+        Put("InRow0",false);Put("InRow1",false);now+=.3;Put("InRow1",true);s.Tick(now);
+        Check(s.Model.Functions.Last().Selected,"a full release re-arms an intentional neighbouring-row selection");
+        Put("InRow1",false);now+=.3;Put("InRow0",true);Put("InRow1",true);s.Tick(now);
+        Check(!s.Model.Functions.First().Selected && s.Model.Functions.Last().Selected,"ambiguous same-frame contact on two rows toggles neither");
+    }
+    private static void Projection()
+    {
+        foreach(var size in new[] {0f,.2f,1f})
+        {
+            var scale=.4f+size*1.2f;
+            var target=new System.Numerics.Vector3((700f/1240-.5f)*.74f*scale,(.5f-250f/608)*.74f*608/1240*scale,0);
+            var origin=target+new System.Numerics.Vector3(.3f,-.1f,-.8f);
+            var tip=origin+System.Numerics.Vector3.Normalize(target-origin)*.2f;
+            Check(PointerProjection.TryProject(origin,tip,size,out var p) && Math.Abs(p.X-700)<.01f && Math.Abs(p.Y-350)<.01f,"oblique pointer remains on the exact panel coordinates at size "+size);
+        }
+        Check(!PointerProjection.TryProject(new(0,0,-.5f),new(0,0,-.7f),.2f,out _),"pointer facing away from the panel has no visual or target");
+        Check(!PointerProjection.TryProject(new(0,0,-.5f),new(.2f,0,-.499f),.2f,out _),"grazing angles are rejected before they amplify tracking noise");
+        Check(!PointerProjection.TryProject(new(0,0,-.5f),new(0,0,-.5f),.2f,out _) && !PointerProjection.TryProject(new(float.NaN,0,-.5f),new(0,0,-.3f),.2f,out _),"incoherent or invalid endpoint measurements cannot produce a hit");
+        var gapX=(333f/1240-.5f)*.74f;
+        Check(!PointerProjection.TryProject(new(gapX,0,-.5f),new(gapX,0,-.3f),.5f,out _),"transparent gap between the two panels is not a pointer hitbox");
     }
     private static void Pointer()
     {
@@ -114,7 +136,7 @@ internal static class Program
         void Put(string name,object value)=>s.Vrc.Apply(new("/avatar/parameters/"+ToyControlContract.Prefix+name,[value]),now);
         void Tick() { now+=.01; s.Tick(now); }
         void Aim(string hand,float x,float y,bool hit=true)
-        { Put("InPointer"+hand+"X",x/1240); Put("InPointer"+hand+"Y",1-(y-100)/608); Put("InPointer"+hand+"Hit",hit); }
+        { PoseInput.Aim(Put,hand,x,y,hit); }
         void Press(string hand,bool value) { Put("InPointer"+hand+"Press",value); Tick(); }
         Put("Visible",true); Put("InBeat",true); Tick();
         Check(!s.PointerMode && ToyControlLayout.Hit(new(720,148))==28,"Touch is the default and mode button sits beside Play loop");
@@ -165,6 +187,12 @@ internal static class Program
         router.Send(s); Thread.Sleep(20); var feedback=new List<OscMessage>(); IPEndPoint remote=new(IPAddress.Any,0);
         while(peer.Available>0) feedback.AddRange(OscCodec.Decode(peer.Receive(ref remote)));
         Check(feedback.Any(m=>m.Address.EndsWith("Rx_Pointer") && (float)m.Arguments[0]==1),"pointer mode reaches the avatar through the actual display-feedback UDP path");
+        Put("Visible",true);Put("InBeat",false);Press("L",false);Aim("L",700,350);Tick();
+        router.Send(s);Thread.Sleep(10);
+        while(peer.Available>0) peer.Receive(ref remote);
+        Aim("L",730,370);Tick();router.Send(s);Thread.Sleep(10);feedback.Clear();
+        while(peer.Available>0) feedback.AddRange(OscCodec.Decode(peer.Receive(ref remote)));
+        Check(feedback.Any(m=>m.Address.EndsWith("Rx_PointerLX") && Math.Abs((float)m.Arguments[0]-730f/1240)<.001f),"cursor UDP feedback bypasses the slower graph refresh and uses the same projected hit");
     }
     private static void FailedZero()
     {
@@ -232,10 +260,10 @@ internal static class Program
         void Put(string name,object value) => session.Vrc.Apply(new("/avatar/parameters/"+ToyControlContract.Prefix+name,[value]),now);
         bool beat=true;
         void Beat(double seconds) { now+=seconds; Put("InBeat",!beat); beat=!beat; session.Tick(now); }
-        void Rows(params string[] names) { foreach(var name in names) Put(name,false); now+=.21; foreach(var name in names) Put(name,true); }
+        void Rows(params string[] names) { foreach(var name in names) {for(var i=0;i<7;i++) Put("InRow"+i,false);now+=.21;Put(name,true);session.Tick(now);}foreach(var name in names) Put(name,false); }
         Put("Visible",true); Put("InBeat",true); session.Tick(now);
         Check(session.Vrc.IsLive,"visible local avatar heartbeat establishes the control session");
-        Put("InRow0",true); Put("InRow1",true); Put("InRecord",true); Put("InY",.8f); Put("InX",.2f); Put("InTouch",true); session.Tick(now);
+        Rows("InRow0","InRow1"); Put("InRecord",true); Put("InY",.8f); Put("InX",.2f); Put("InTouch",true); session.Tick(now);
         Check(session.Model.Recording && f.Controller.State("fixture","v1").RequestedPercent==80 && f.Controller.State("fixture","v2").RequestedPercent==80,"VR row group and Record/touch route through the actual controller");
         Beat(.3); Put("InY",.3f); session.Tick(now); Beat(.3);
         Put("InTouch",false); Put("InY",0f); session.Tick(now);
@@ -353,7 +381,7 @@ internal static class Program
         using var toys=new LocalToysPage(); using var form=new OverlayForm(new BridgeConfig(),initialSaveConfig:_=>{},initialLocalToys:toys);
         Button Field(string name)=>(Button)typeof(OverlayForm).GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(form)!;
         Check(Field("toyControlNav").Text.Contains("Toy control") && Field("toyControlNav").Top>Field("toyPanelNav").Top && Field("toyControlNav").Top<Field("logsNav").Top,"Toy control navigation sits directly below Toy panel");
-        Check(ToyControlContract.BoolInputs.Length+ToyControlContract.FloatInputs.Length+1+ToyControlContract.FeedbackFields().Length==592 && ToyControlContract.Rows==7 && ToyControlContract.Version==5,"v5 contract retains seven rows and adds page/slider input and shocker feedback without synced parameters");
+        Check(ToyControlContract.BoolInputs.Length+ToyControlContract.FloatInputs.Length+1+ToyControlContract.FeedbackFields().Length==615 && ToyControlContract.Rows==7 && ToyControlContract.Version==6,"v6 adds contact pose input and surface cursor feedback with zero synced parameter cost");
         Check(Field("shockerControlNav").Top>Field("toyControlNav").Top && Field("shockerControlNav").Top<Field("spsNav").Top,"new Shocker control tab sits below Toy control");
     }
     private static void Design(bool warp)

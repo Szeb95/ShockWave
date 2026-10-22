@@ -20,7 +20,11 @@ namespace ShockWave.ToyControl
 {
     public sealed partial class ToyControlSetupWindow : EditorWindow
     {
-        internal const string HostName="ShockWaveToyControl", LegacyHostName="SzebsToyControl", AssetRoot="Assets/SzebsToys/ToyControl", SourceRoot="Assets/Editor/SzebsToysToyControl";
+        internal const string HostName="ShockWaveToyControl", LegacyHostName="SzebsToyControl", AssetRoot="Assets/SzebsToys/ToyControl";
+        internal static string SourceRoot
+        {
+            get {var package=UnityEditor.PackageManager.PackageInfo.FindForAssembly(typeof(ToyControlSetupWindow).Assembly); return package!=null ? "Packages/"+package.name+"/Editor" : "Assets/Editor/SzebsToysToyControl";}
+        }
         internal const float BoardWidth=0.74f, LogicalWidth=1240, LogicalHeight=608, LogicalTop=100;
         internal const float MinimumSize=0.4f, MaximumSize=1.6f;
         internal static readonly int[] GrabGestures={1,6,7}; // VRChat Fist, HandGun, ThumbsUp.
@@ -29,10 +33,11 @@ namespace ShockWave.ToyControl
         internal static readonly string[] GripInputs={"GrabLLeft","GrabLRight","GrabRLeft","GrabRRight"};
         [SerializeField] private VRCAvatarDescriptor avatar;
         [SerializeField] private float handGap=0.04f,handForward=0.10f;
-        [MenuItem("Tools/ShockWave/Toy Control/Add to Avatar")]
+        [SerializeField] private string menuPath="ShockWave";
+        [MenuItem("Tools/ShockWave/Panel")]
         public static void Open()
         {
-            var window=GetWindow<ToyControlSetupWindow>("ShockWave Toy Control"); window.minSize=new Vector2(520,330);
+            var window=GetWindow<ToyControlSetupWindow>("ShockWave Panel"); window.minSize=new Vector2(520,330);
             if(Selection.activeGameObject!=null) window.avatar=Selection.activeGameObject.GetComponentInParent<VRCAvatarDescriptor>();
             window.Show();
         }
@@ -40,11 +45,12 @@ namespace ShockWave.ToyControl
         {
             EditorGUILayout.LabelField("VRC toy control",EditorStyles.boldLabel);
             avatar=(VRCAvatarDescriptor)EditorGUILayout.ObjectField("Avatar",avatar,typeof(VRCAvatarDescriptor),true);
+            menuPath=EditorGUILayout.TextField("Radial menu path",menuPath);
             handGap=EditorGUILayout.Slider("Gap beside right hand (m)",handGap,0.01f,0.15f);
             handForward=EditorGUILayout.Slider("Forward from hand (m)",handForward,0,0.25f);
-            EditorGUILayout.HelpBox("Adds a ShockWave Toy Control panel with touch and either-hand pointing. Touch / Pointer beside Play loop switches modes. Aim your hand like a pistol; curl the index into Thumbs Up to click or hold to draw. Finger gestures do not steer the pointer. Open VRC toy control > Show panel in VRChat.",MessageType.Info);
+            EditorGUILayout.HelpBox("Choose a radial menu path, for example Utilities/ShockWave. Leave it empty for the root menu. The menu contains Show panel, Follow right hand and Panel size (20% by default). The panel starts hidden in Unity and VRChat.",MessageType.Info);
             EditorGUILayout.HelpBox("Keep ShockWave running and enable OSC in VRChat. Connected toys appear automatically. Toy panel sensitivity and Max % apply to all input. Use Test mode first; recordings stay in the program.",MessageType.Info);
-            EditorGUILayout.HelpBox("Show/Recall places the panel beside your right hand. Touch either floating strip and make the pistol / Hand Gun gesture to move it; release that gesture to drop. Panel size is saved locally. Update replaces only this tool's existing host, preserves its old assets and can be undone.",MessageType.Info);
+            EditorGUILayout.HelpBox("The panel follows your avatar's movement and rotation. Follow right hand includes wrist rotation. Touch either floating strip with a grab gesture to reposition. Touch / Pointer beside Play loop switches input; aim like a pistol and curl the index into Thumbs Up to click. Update replaces only this tool's host, preserves old assets and can be undone.",MessageType.Info);
             var error=ValidateAvatar(avatar,true); if(error!=null) EditorGUILayout.HelpBox(error,MessageType.Warning);
             using(new EditorGUI.DisabledScope(error!=null)) if(GUILayout.Button(Existing(avatar)==null ? "Add Toy Control to Avatar" : "Update Toy Control on Avatar",GUILayout.Height(38))) Install();
         }
@@ -61,17 +67,19 @@ namespace ShockWave.ToyControl
         {
             try
             {
-                var old=Existing(avatar); string folder; var host=Build(avatar,handGap,handForward,out folder,replaceExisting:old!=null);
+                var old=Existing(avatar); string folder; var host=Build(avatar,handGap,handForward,out folder,replaceExisting:old!=null,menuPath:menuPath);
                 Undo.IncrementCurrentGroup(); var undo=Undo.GetCurrentGroup(); Undo.SetCurrentGroupName("Add/update ShockWave Toy Control");
                 Undo.RegisterCreatedObjectUndo(host,"Add/update ShockWave Toy Control"); if(old!=null) Undo.DestroyObjectImmediate(old); Undo.CollapseUndoOperations(undo); EditorSceneManager.MarkSceneDirty(avatar.gameObject.scene);
                 Debug.Log("VRC toy control added. Save the scene when ready. Assets: "+folder,host);
-                EditorUtility.DisplayDialog("Toy Control added","Save your scene when ready. Keep ShockWave running, enable OSC in VRChat and open VRC toy control > Show panel. Start in Test mode. Original avatar/controller/menu assets were preserved.","OK");
+                EditorUtility.DisplayDialog("Toy Control added","The panel starts hidden. Save your scene and upload when ready. Keep ShockWave running, enable OSC in VRChat and use Show panel in your chosen radial menu path. Start in Test mode. Existing avatar/controller/menu assets were preserved.","OK");
             }
             catch(Exception ex) { Debug.LogException(ex); EditorUtility.DisplayDialog("Toy control could not be added","Only this invocation's partial new object/assets were removed. See the Console.","OK"); }
         }
-        internal static GameObject Build(VRCAvatarDescriptor target,float gap,float forward,out string folder,bool replaceExisting=false,Func<HumanBodyBones,Transform> resolveBone=null)
+        internal static GameObject Build(VRCAvatarDescriptor target,float gap,float forward,out string folder,bool replaceExisting=false,Func<HumanBodyBones,Transform> resolveBone=null,string menuPath="ShockWave")
         {
             var error=ValidateAvatar(target,replaceExisting); if(error!=null) throw new InvalidOperationException(error);
+            menuPath=string.Join("/",(menuPath ?? "").Split('/').Select(s=>s.Trim()).Where(s=>s.Length>0));
+            if(menuPath.Length>128 || menuPath.Any(char.IsControl)) throw new ArgumentException("Use a menu path up to 128 characters without line breaks.");
             if(float.IsNaN(gap) || float.IsInfinity(gap) || float.IsNaN(forward) || float.IsInfinity(forward) || gap<0.01f || gap>0.15f || forward<0 || forward>0.25f) throw new ArgumentOutOfRangeException();
             folder=null; GameObject host=null;
             try
@@ -91,11 +99,14 @@ namespace ShockWave.ToyControl
                 var anchors=Child("HandAnchors",host.transform); var rightPosition=Child("RightHandPosition",anchors.transform);
                 rightPosition.transform.position=right.position;
                 var anchorConstraint=rightPosition.AddComponent<VRCParentConstraint>(); anchorConstraint.Sources.Add(new VRCConstraintSource(right,1,Vector3.zero,Vector3.zero));
-                anchorConstraint.AffectsRotationX=anchorConstraint.AffectsRotationY=anchorConstraint.AffectsRotationZ=false; anchorConstraint.IsActive=true; anchorConstraint.Locked=true;
+                rightPosition.transform.rotation=target.transform.rotation;
+                var handSource=anchorConstraint.Sources[0]; handSource.ParentRotationOffset=(Quaternion.Inverse(right.rotation)*target.transform.rotation).eulerAngles; anchorConstraint.Sources[0]=handSource;
+                anchorConstraint.AffectsRotationX=anchorConstraint.AffectsRotationY=anchorConstraint.AffectsRotationZ=true; anchorConstraint.IsActive=true; anchorConstraint.Locked=true;
                 var spawn=Child("SpawnRight",rightPosition.transform); spawn.transform.localPosition=new Vector3((-BoardWidth/2-gap)/scale.x,0,forward/scale.z);
                 panel.transform.SetPositionAndRotation(spawn.transform.position,spawn.transform.rotation);
                 var constraint=panel.AddComponent<VRCParentConstraint>(); constraint.Sources.Add(new VRCConstraintSource(spawn.transform,1,Vector3.zero,Vector3.zero));
                 constraint.Sources.Add(new VRCConstraintSource(left,0,Vector3.zero,Vector3.zero)); constraint.Sources.Add(new VRCConstraintSource(right,0,Vector3.zero,Vector3.zero));
+                constraint.Sources.Add(new VRCConstraintSource(target.transform,0,Vector3.zero,Vector3.zero));
                 constraint.IsActive=true; constraint.Locked=true;
                 var size=Child("Size",panel.transform);
                 var board=GameObject.CreatePrimitive(PrimitiveType.Quad); board.name="Board"; DestroyImmediate(board.GetComponent<Collider>()); board.transform.SetParent(panel.transform,false);
@@ -104,20 +115,12 @@ namespace ShockWave.ToyControl
                 var renderer=board.GetComponent<MeshRenderer>(); renderer.sharedMaterial=material; renderer.shadowCastingMode=ShadowCastingMode.Off; renderer.receiveShadows=false;
                 Contacts(size.transform); Grips(size.transform); BuildPointers(host.transform,size.transform,Bone,folder,scale);
                 var parameters=Parameters(folder); var menu=Menu(folder); var controller=Controller(folder,scale,gap);
-                var full=FuryComponents.CreateFullController(host); full.AddController(controller,VRCAvatarDescriptor.AnimLayerType.FX); full.AddMenu(menu); full.AddParams(parameters);
+                var full=FuryComponents.CreateFullController(host); full.AddController(controller,VRCAvatarDescriptor.AnimLayerType.FX); full.AddMenu(menu,menuPath); full.AddParams(parameters);
                 foreach(var p in parameters.parameters) full.AddGlobalParam(p.name);
                 foreach(var name in GripInputs) full.AddGlobalParam(ToyControlContract.Prefix+name);
                 full.AddGlobalParam(ToyControlContract.Prefix+"InputReady");
-                foreach(var hand in new[] {"L","R"})
-                {
-                    var rayPrefix=ToyControlContract.Prefix+"Ray"+hand;
-                    // VRCFury rewrites the component's base prefix separately
-                    // from its derived fields. Keep both global so native ray
-                    // diagnostics still drive beam length and dot visibility.
-                    full.AddGlobalParam(rayPrefix);
-                    foreach(var field in new[] {"_Hit","_Ratio","_Distance"}) full.AddGlobalParam(rayPrefix+field);
-                }
                 foreach(var path in AssetDatabase.FindAssets("",new[] {folder}).Select(AssetDatabase.GUIDToAssetPath).Distinct()) AssetDatabase.SaveAssetIfDirty(AssetDatabase.LoadMainAssetAtPath(path));
+                panel.SetActive(false); // Hidden in Unity until explicitly shown by the avatar menu.
                 return host;
             }
             catch { if(host!=null) DestroyImmediate(host); if(folder!=null && AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder); throw; }
@@ -142,7 +145,9 @@ namespace ShockWave.ToyControl
         {
             var contacts=Child("Contacts",panel).transform; var graph=new Rect(405,230,765,352);
             Contact(contacts,"InTouch",graph); Contact(contacts,"InX",graph,true,Quaternion.Euler(0,90,0)); Contact(contacts,"InY",graph,true,Quaternion.Euler(-90,0,0));
-            for(var row=0;row<ToyControlContract.Rows;row++) Contact(contacts,"InRow"+row,new Rect(40,240+row*64,268,60));
+            // Broad finger senders can overlap neighbouring full-height cards.
+            // Keep a 24px vertical dead zone between the actual touch targets.
+            for(var row=0;row<ToyControlContract.Rows;row++) Contact(contacts,"InRow"+row,new Rect(50,250+row*64,248,40),depth:.008f);
             ButtonContact(contacts,"InRecord",new Rect(365,127,130,42)); ButtonContact(contacts,"InPlay",new Rect(499,127,155,42));
             ButtonContact(contacts,"InInputMode",new Rect(658,127,130,42));
             ButtonContact(contacts,"InClear",new Rect(40,176,132,60)); ButtonContact(contacts,"InStop",new Rect(176,176,132,60));
@@ -180,37 +185,24 @@ namespace ShockWave.ToyControl
             void Add(string name,VRCExpressionParameters.ValueType type) { list.Add(new VRCExpressionParameters.Parameter {name=name,valueType=type,networkSynced=false,saved=false,defaultValue=0}); }
             foreach(var name in ToyControlContract.BoolInputs) Add(ToyControlContract.Prefix+name,VRCExpressionParameters.ValueType.Bool);
             foreach(var name in ToyControlContract.FloatInputs) Add(ToyControlContract.Prefix+name,VRCExpressionParameters.ValueType.Float);
-            list.Add(new VRCExpressionParameters.Parameter {name=ToyControlContract.Prefix+"Size",valueType=VRCExpressionParameters.ValueType.Float,networkSynced=false,saved=true,defaultValue=0.5f});
+            list.Add(new VRCExpressionParameters.Parameter {name=ToyControlContract.Prefix+"Size",valueType=VRCExpressionParameters.ValueType.Float,networkSynced=false,saved=true,defaultValue=0.2f});
             Add(ToyControlContract.Prefix+"RxBeat",VRCExpressionParameters.ValueType.Bool);
             foreach(var name in ToyControlContract.FeedbackFields()) Add(ToyControlContract.ReceivePrefix+name,VRCExpressionParameters.ValueType.Float);
             var asset=ScriptableObject.CreateInstance<VRCExpressionParameters>(); asset.parameters=list.ToArray(); AssetDatabase.CreateAsset(asset,folder+"/Parameters.asset"); return asset;
         }
         private static VRCExpressionsMenu Menu(string folder)
         {
-            VRCExpressionsMenu New(string name) { var m=ScriptableObject.CreateInstance<VRCExpressionsMenu>(); m.controls=new List<VRCExpressionsMenu.Control>(); AssetDatabase.CreateAsset(m,folder+"/"+name+".asset"); return m; }
-            VRCExpressionsMenu.Control Button(string label,string param,bool toggle=false) { return new VRCExpressionsMenu.Control {name=label,type=toggle ? VRCExpressionsMenu.Control.ControlType.Toggle : VRCExpressionsMenu.Control.ControlType.Button,parameter=new VRCExpressionsMenu.Control.Parameter {name=ToyControlContract.Prefix+param},value=1}; }
-            VRCExpressionsMenu.Control Sub(string label,VRCExpressionsMenu m) { return new VRCExpressionsMenu.Control {name=label,type=VRCExpressionsMenu.Control.ControlType.SubMenu,subMenu=m}; }
-            var root=New("Menu"); var main=New("Controls"); var patterns=New("Patterns"); var rows=New("Rows"); var test=New("TouchTest"); var route=New("Destination");
-            root.controls.Add(Sub("VRC toy control",main));
-            main.controls.Add(Button("Show panel","Visible",true)); main.controls.Add(Button("Follow right hand","Follow",true)); main.controls.Add(Button("Recall to right hand","Recall"));
-            main.controls.Add(Sub("Pattern controls",patterns)); main.controls.Add(Sub("Select visible rows",rows)); main.controls.Add(Sub("Touch test / calibration",test)); main.controls.Add(Button("Toys / Shockers","InPage"));
-            main.controls.Add(new VRCExpressionsMenu.Control {name="Panel size",type=VRCExpressionsMenu.Control.ControlType.RadialPuppet,subParameters=new[] {new VRCExpressionsMenu.Control.Parameter {name=ToyControlContract.Prefix+"Size"}}});
-            foreach(var item in new[] {("Record next touch","InRecord"),("Play loop","InPlay"),("Stop all","InStop"),("Clear curve","InClear"),("Previous page","InPrev"),("Next page","InNext")}) patterns.controls.Add(Button(item.Item1,item.Item2));
-            patterns.controls.Add(Button("Switch Touch / Pointer","InInputMode"));
-            for(var i=0;i<ToyControlContract.Rows;i++) rows.controls.Add(Button("Toggle row "+(i+1),"InRow"+i));
-            var paging=New("Paging"); rows.controls.Add(Sub("Pages",paging)); paging.controls.Add(Button("Previous page","InPrev")); paging.controls.Add(Button("Next page","InNext"));
-            test.controls.Add(Button("Emulate touch","InTestTouch",true));
-            foreach(var axis in new[] {"X","Y"}) test.controls.Add(new VRCExpressionsMenu.Control {name="Test "+axis,type=VRCExpressionsMenu.Control.ControlType.RadialPuppet,subParameters=new[] {new VRCExpressionsMenu.Control.Parameter {name=ToyControlContract.Prefix+"InTest"+axis}}});
-            test.controls.Add(Button("Invert finger X","InFlipX",true)); test.controls.Add(Button("Invert finger Y","InFlipY",true));
-            foreach(var target in new[] {"Own","Remote","Both"}) route.controls.Add(Button(target,"In"+target));
-            foreach(var m in new[] {root,main,patterns,rows,paging,test,route}) EditorUtility.SetDirty(m); return root;
+            var menu=ScriptableObject.CreateInstance<VRCExpressionsMenu>();
+            VRCExpressionsMenu.Control Toggle(string label,string parameter) => new VRCExpressionsMenu.Control {name=label,type=VRCExpressionsMenu.Control.ControlType.Toggle,parameter=new VRCExpressionsMenu.Control.Parameter {name=ToyControlContract.Prefix+parameter},value=1};
+            menu.controls=new List<VRCExpressionsMenu.Control> {Toggle("Show panel","Visible"),Toggle("Follow right hand","Follow"),new VRCExpressionsMenu.Control {name="Panel size",type=VRCExpressionsMenu.Control.ControlType.RadialPuppet,subParameters=new[] {new VRCExpressionsMenu.Control.Parameter {name=ToyControlContract.Prefix+"Size"}}}};
+            AssetDatabase.CreateAsset(menu,folder+"/Controls.asset"); return menu;
         }
         private static AnimatorController Controller(string folder,Vector3 avatarScale,float gap)
         {
             var c=AnimatorController.CreateAnimatorControllerAtPath(folder+"/FX.controller");
             foreach(var name in ToyControlContract.BoolInputs) c.AddParameter(ToyControlContract.Prefix+name,AnimatorControllerParameterType.Bool);
             foreach(var name in ToyControlContract.FloatInputs) c.AddParameter(ToyControlContract.Prefix+name,AnimatorControllerParameterType.Float);
-            c.AddParameter(new AnimatorControllerParameter {name=ToyControlContract.Prefix+"Size",type=AnimatorControllerParameterType.Float,defaultFloat=0.5f});
+            c.AddParameter(new AnimatorControllerParameter {name=ToyControlContract.Prefix+"Size",type=AnimatorControllerParameterType.Float,defaultFloat=0.2f});
             foreach(var name in GripInputs) c.AddParameter(ToyControlContract.Prefix+name,AnimatorControllerParameterType.Bool);
             c.AddParameter("GestureLeft",AnimatorControllerParameterType.Int); c.AddParameter("GestureRight",AnimatorControllerParameterType.Int);
             c.AddParameter(ToyControlContract.Prefix+"RxBeat",AnimatorControllerParameterType.Bool); c.AddParameter("IsLocal",AnimatorControllerParameterType.Bool);
@@ -230,6 +222,7 @@ namespace ShockWave.ToyControl
             var place=Layer(c,"Local placement");
             var hidden=State(place,"Hidden",Placement(c,"Hidden",false,false,0.2f)); var settling=State(place,"Place beside right hand",Placement(c,"Place",true,false,0.2f));
             var pinned=State(place,"Dropped",Placement(c,"Dropped",true,true,0.1f)); var follow=State(place,"Follow right hand",Placement(c,"Follow",true,false,0.1f)); place.defaultState=hidden;
+            var avatarFollow=State(place,"Follow avatar",Placement(c,"Follow avatar",true,false,.1f,3,true));
             var prepareLeft=State(place,"Prepare left grab",Placement(c,"Prepare left grab",true,true,0.05f,1,true));
             var prepareRight=State(place,"Prepare right grab",Placement(c,"Prepare right grab",true,true,0.05f,2,true));
             var grabLeft=State(place,"Grab left hand",Placement(c,"Grab left hand",true,false,0.1f,1,true));
@@ -239,8 +232,8 @@ namespace ShockWave.ToyControl
             foreach(var state in new[] {prepareLeft,prepareRight,grabLeft,grabRight,guardedDrop})
                 foreach(var name in new[] {"InTouch","InPanelTouch","InPage","InTestTouch","InRecord","InPlay","InHold","InClear","InStop","InOwn","InRemote","InBoth"}) Driver(state,name,0);
             var show=Transition(hidden,settling); Bool(show,"Visible",true); show.AddCondition(AnimatorConditionMode.If,0,"IsLocal");
-            foreach(var state in new[] {settling,pinned,follow,prepareLeft,prepareRight,grabLeft,grabRight,guardedDrop}) {Bool(Transition(state,hidden),"Visible",false); Transition(state,hidden).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");}
-            foreach(var state in new[] {pinned,follow})
+            foreach(var state in new[] {settling,pinned,follow,avatarFollow,prepareLeft,prepareRight,grabLeft,grabRight,guardedDrop}) {Bool(Transition(state,hidden),"Visible",false); Transition(state,hidden).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");}
+            foreach(var state in new[] {pinned,follow,avatarFollow})
             {
                 foreach(var side in new[] {"Left","Right"}) foreach(var gesture in GrabGestures)
                 {
@@ -260,6 +253,7 @@ namespace ShockWave.ToyControl
             foreach(var grip in GripInputs) Bool(resume,grip,false);
             Bool(Transition(guardedDrop,settling),"Recall",true);
             Bool(Transition(pinned,follow),"Follow",true); Bool(Transition(follow,settling),"Follow",false); Bool(Transition(pinned,settling),"Recall",true);
+            Bool(Transition(pinned,avatarFollow),"Follow",false); Bool(Transition(avatarFollow,follow),"Follow",true); Bool(Transition(avatarFollow,settling),"Recall",true);
             var drop=Transition(settling,pinned); drop.hasExitTime=true; drop.exitTime=1; Bool(drop,"Follow",false); Bool(drop,"Recall",false);
             var following=Transition(settling,follow); following.hasExitTime=true; following.exitTime=1; Bool(following,"Follow",true);
             var beat=Layer(c,"Avatar heartbeat"); var dormant=State(beat,"Hidden",Clip(c,"No heartbeat",0.25f)); var a=State(beat,"Pulse A",Clip(c,"Beat A",0.25f)); var b=State(beat,"Pulse B",Clip(c,"Beat B",0.25f)); beat.defaultState=dormant;
@@ -286,7 +280,7 @@ namespace ShockWave.ToyControl
                 Curve(clip,"HandAnchors/RightHandPosition/SpawnRight",typeof(Transform),"m_LocalPosition.x",(-BoardWidth*value/2-gap)/avatarScale.x);
                 sizes.AddChild(clip,i);
             }
-            State(sizing,"Size",sizes); PointerLayers(c); ShockerViewLayer(c); EditorUtility.SetDirty(c); return c;
+            State(sizing,"Size",sizes); PointerLayers(c); ShockerViewLayer(c); PointerPositionLayer(c); EditorUtility.SetDirty(c); return c;
         }
         private static AnimatorStateMachine Layer(AnimatorController c,string name) {c.AddLayer(name); var layers=c.layers; layers[layers.Length-1].defaultWeight=1; c.layers=layers; return layers[layers.Length-1].stateMachine;}
         private static AnimatorState State(AnimatorStateMachine sm,string name,Motion motion) {var s=sm.AddState(name); s.motion=motion; s.writeDefaultValues=false; return s;}
@@ -306,8 +300,8 @@ namespace ShockWave.ToyControl
             var clip=Clip(c,name,duration); Curve(clip,"Panel",typeof(GameObject),"m_IsActive",visible ? 1 : 0,duration); Curve(clip,"Panel",typeof(VRCParentConstraint),"FreezeToWorld",freeze ? 1 : 0,duration);
             Curve(clip,"HandAnchors",typeof(GameObject),"m_IsActive",visible ? 1 : 0,duration);
             Curve(clip,"Panel",typeof(VRCParentConstraint),"RebakeOffsetsWhenUnfrozen",rebake ? 1 : 0,duration);
-            Curve(clip,"Panel/Size/Contacts",typeof(GameObject),"m_IsActive",source==0 && contacts ? 1 : 0,duration);
-            for(var i=0;i<3;i++) Curve(clip,"Panel",typeof(VRCParentConstraint),"Sources.source"+i+".Weight",i==source ? 1 : 0,duration);
+            Curve(clip,"Panel/Size/Contacts",typeof(GameObject),"m_IsActive",(source==0 || source==3) && contacts ? 1 : 0,duration);
+            for(var i=0;i<4;i++) Curve(clip,"Panel",typeof(VRCParentConstraint),"Sources.source"+i+".Weight",i==source ? 1 : 0,duration);
             foreach(var kind in new[] {"ParentPositionOffset","ParentRotationOffset"}) foreach(var axis in new[] {"x","y","z"}) Curve(clip,"Panel",typeof(VRCParentConstraint),"Sources.source0."+kind+"."+axis,0,duration);
             return clip;
         }

@@ -1,5 +1,13 @@
 # Draft remote protocol
 
+## Implemented avatar panel v6 — 2026-10-23
+
+The local avatar contract is v6; the separate app-to-app protocol, grants and freshness deadlines are unchanged. Existing v5 shocker confirmation/acknowledgement remains intact. New Bool inputs under `SzebsToy_`: `InPointerReady`, `InPoseLOHit`, `InPoseLTHit`, `InPoseROHit`, `InPoseRTHit`. New normalized Float inputs: `InPose{L|R}{O|T}{X|Y|Z}`. O/T are rigid 20 cm-separated points; each decoded panel-root coordinate is `(value - 0.5) * 3.5` metres. Endpoint hit flags and all six coordinates must be valid. Size is now accepted as a presentation Float and defaults to 0.2 when absent; it does not itself request output. Old native pointer fields remain accepted for contract compatibility but do not supply v6 hits.
+
+New feedback under `SzebsToy_Rx_`: `Pointer{L|R}{X|Y|Valid}`. X is logical x/1240; Y is `1 - (logicalY - 100)/608`; Valid is 0/1. The app computes the same ray/rounded-panel intersection for selection and cursor feedback. A tiny fixed local z offset keeps the rendered cursor on the board. Each hand has its own feedback/press state; held drags do not transfer hands. Cursor bundles are independent of the large graph refresh. Full frames still refresh fields periodically; existing quarter-second heartbeat and two-second local source expiry remain unchanged. No retry/replay or physical output is added by hover.
+
+The generated avatar has **554 feedback Floats, 616 local expression parameters (zero synced cost), 13 FX layers, 41 Local Only receivers and four Local Only senders**. Only Size is saved. There are no scene/native raycasts or physical target colliders. The three radial controls are Show panel, Follow right hand and Panel size; default visibility is off, fresh Size 0.2. A configurable VRCFury menu prefix preserves existing menus. Body movement/rotation is the normal placement mode; right-hand following includes wrist rotation. New pointer operation requires both the updated avatar and Windows 0.7.9 or later.
+
 **Local presentation/ownership correction, 0.7.8 (2026-10-22):** the existing reserved `remote/` device namespace cannot become a local SPS target. Both compilers ignore such saved mappings and automatic target inputs; the UI excludes their rows/options without deleting old records. Runtime friend-inventory replacement/disconnect now immediately reconciles Toy control rows and leases independently of the drawing/OSC timer, retaining unaffected input and requiring fresh selection/input for returning toys. Active socket ordering/name color remains display-only. No network/private worker message, persistence version, OSC address, permission or freshness bound changed.
 
 ## Local automatic SPS extension — 2026-10-22 (0.7.7)

@@ -260,11 +260,14 @@ internal sealed class VrcToyInput(ToyControlSession session)
     private readonly Dictionary<string, bool> bools = [];
     private readonly Dictionary<string, float> floats = [];
     private readonly List<string> actions = [];
-    private readonly HashSet<string> touchedRows = [];
-    private readonly Dictionary<string, double> rowReleasedAt = [];
+    private bool hadRowGesture;
+    private string acceptedRow="";
+    private double rowsReleasedAt=double.NegativeInfinity;
     private bool visible, visibilityKnown, hadBeat, previousTouch, blockedTouch, previousPanel, blockedPanel;
     private readonly bool[] previousPointerPress=new bool[2], blockedPointer=new bool[2];
     private int pointerHand=-1, pointerDrag, panelDrag;
+    public PointF[] PointerPoints { get; }=new PointF[2];
+    public bool[] PointerValid { get; }=new bool[2];
     private double lastBeat = double.NegativeInfinity;
     public string WaitingReason { get; private set; } = "Waiting for VRC";
     public int Interruptions { get; private set; }
@@ -273,6 +276,9 @@ internal sealed class VrcToyInput(ToyControlSession session)
     private bool Bool(string name) => bools.GetValueOrDefault(name);
     public void BlockTouch()
     {
+        Array.Clear(PointerValid);
+        acceptedRow=""; hadRowGesture=bools.Any(p=>p.Key.StartsWith("InRow",StringComparison.Ordinal) && p.Value);
+        rowsReleasedAt=hadRowGesture ? double.PositiveInfinity : double.NegativeInfinity;
         session.Shockers.ResetInput();
         blockedPanel=Bool("InPanelTouch"); previousPanel=false; panelDrag=0;
         blockedTouch = Bool("InTouch") || Bool("InTestTouch"); previousTouch = false;
@@ -286,9 +292,9 @@ internal sealed class VrcToyInput(ToyControlSession session)
         var prefix = "/avatar/parameters/" + ToyControlContract.Prefix;
         if (!message.Address.StartsWith(prefix, StringComparison.Ordinal)) return false;
         var name = message.Address[prefix.Length..];
-        if (!ToyControlContract.BoolInputs.Contains(name) && !ToyControlContract.FloatInputs.Contains(name)) return false;
+        if (!ToyControlContract.BoolInputs.Contains(name) && !ToyControlContract.FloatInputs.Contains(name) && name!="Size") return false;
         if (message.Arguments.Length != 1) return false;
-        if (ToyControlContract.FloatInputs.Contains(name))
+        if (ToyControlContract.FloatInputs.Contains(name) || name=="Size")
         {
             if (message.Arguments[0] is not float value || !float.IsFinite(value) || value < 0 || value > 1) return false;
             floats[name] = value; return true;
@@ -313,14 +319,19 @@ internal sealed class VrcToyInput(ToyControlSession session)
         }
         if (name=="InPanelTouch") { if(!current) { blockedPanel=false; session.Shockers.Release(3); } return true; }
         if (name is "InTouch" or "InTestTouch") { if (!Bool("InTouch") && !Bool("InTestTouch")) blockedTouch = false; return true; }
-        if (name.StartsWith("InPointer",StringComparison.Ordinal)) return true;
+        if (name.StartsWith("InPointer",StringComparison.Ordinal) || name.StartsWith("InPose",StringComparison.Ordinal)) return true;
         if (name.StartsWith("InRow", StringComparison.Ordinal))
         {
-            // A fingertip can briefly leave/re-enter the same receiver on its
-            // way to the graph. Rearm that row only after a deliberate release.
-            if (!current && prior) rowReleasedAt[name] = now;
-            if (current && !prior && (!touchedRows.Contains(name) || now - rowReleasedAt.GetValueOrDefault(name, double.PositiveInfinity) >= .2))
-            { touchedRows.Add(name); actions.Add(name); }
+            // One row per physical touch. Neighbour receivers are not separate
+            // clicks: all rows must release for 200 ms before another choice.
+            var other=bools.Any(p=>p.Key!=name && p.Key.StartsWith("InRow",StringComparison.Ordinal) && p.Value);
+            if(!current && prior && !other) rowsReleasedAt=now;
+            if(current && !prior)
+            {
+                if(!other && (!hadRowGesture || now-rowsReleasedAt>=.2))
+                { hadRowGesture=true; acceptedRow=name; actions.Add(name); }
+                else if(acceptedRow.Length>0) actions.Remove(acceptedRow); // Reject an ambiguous same-frame overlap.
+            }
             return true;
         }
         if (current && !prior && name.StartsWith("In") && name is not ("InFlipX" or "InFlipY")) actions.Add(name);
@@ -381,8 +392,9 @@ internal sealed class VrcToyInput(ToyControlSession session)
         {
             var prefix="InPointer"+(hand==0 ? "L" : "R"); var press=Bool(prefix+"Press");
             if(!press) { blockedPointer[hand]=false; session.Shockers.Release(hand+1); }
-            var valid=Bool(prefix+"Hit") && floats.ContainsKey(prefix+"X") && floats.ContainsKey(prefix+"Y");
-            var point=new PointF(floats.GetValueOrDefault(prefix+"X")*1240,100+(1-floats.GetValueOrDefault(prefix+"Y"))*608);
+            var valid=PosePoint(hand,out var point);
+            PointerValid[hand]=valid;
+            if(valid) PointerPoints[hand]=point;
             var hit=valid ? ToyControlLayout.Hit(point,session) : 0;
             if(held==hand)
             {
@@ -401,5 +413,17 @@ internal sealed class VrcToyInput(ToyControlSession session)
             previousPointerPress[hand]=press;
             if(!session.PointerMode) return;
         }
+    }
+    private bool PosePoint(int hand,out PointF point)
+    {
+        point=default; var h=hand==0 ? "L" : "R";
+        if(!Bool("InPointerReady") || !Bool("InPose"+h+"OHit") || !Bool("InPose"+h+"THit")) return false;
+        var values=new float[6]; var i=0;
+        foreach(var end in new[] {"O","T"}) foreach(var axis in new[] {"X","Y","Z"})
+        {
+            if(!floats.TryGetValue("InPose"+h+end+axis,out var v) || v<=.002f || v>=.998f) return false;
+            values[i++]=(v-.5f)*PointerProjection.Span;
+        }
+        return PointerProjection.TryProject(new(values[0],values[1],values[2]),new(values[3],values[4],values[5]),floats.GetValueOrDefault("Size",.2f),out point);
     }
 }

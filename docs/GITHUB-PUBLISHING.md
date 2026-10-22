@@ -58,3 +58,11 @@ The first updater-enabled version requires a manual installation. Unity installa
 - [Actions billing and storage allowances](https://docs.github.com/en/billing/concepts/product-billing/github-actions)
 
 Standard public-repository build runners are free under GitHub's current documented terms. Artifact/cache storage has separate allowances; this workflow uploads no build artifacts or cache. A separate GitHub Pages website can be added later if desired; the repository README provides the initial public project page.
+
+## Creator Companion package and listing
+
+`vpm/package.json` defines `com.szebs.shockwave.avatar-panel`, independently versioned from the Windows app. PowerShell 7 `scripts/package-panel.ps1` creates a root-level VPM ZIP/checksum and adds its manifest plus `zipSHA256` to `vpm/index.json`. Existing GUIDs are preserved; missing metadata is deterministic. The legacy migration names only `Assets\Editor\SzebsToysToyControl`, never generated assets, scenes, packages or settings. VRCFury's official repository must be available in VCC for dependency resolution.
+
+Publish immutable package assets under `panel-v<version>` with `gh release create --latest=false`. Do not let an avatar-only release become latest: the Windows updater reads GitHub's stable latest release. Preserve prior listing versions. Verify the public ZIP digest against the listing and test package-based source resolution in a separate scratch project before publication.
+
+The **Publish Creator Companion listing** workflow serves only `vpm/` through GitHub Pages at https://szeb95.github.io/ShockWave/. Its HTTPS landing page links the VCC custom URI and provides a copyable listing URL. GitHub README links the landing page below A look inside, because GitHub does not reliably allow custom VCC URI links. The package updates tools only; users explicitly Update their avatar and upload. Never test/import the real avatar project or change its Packages/settings automatically.

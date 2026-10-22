@@ -76,7 +76,8 @@ internal sealed class ToyOscRouter : IDisposable
     public void Send(ToyControlSession session)
     {
         var now = Clock;
-        if (disposed || Fault is not null || now - lastSend < .05) return;
+        if (disposed || Fault is not null) return;
+        if(now-lastSend<.05) { SendPointerCursor(session); return; }
         lastSend = now;
         // Send freshness before the larger display update. Keep the two-second
         // expiry unchanged, but give dropped display batches more pulse margin.
@@ -90,6 +91,7 @@ internal sealed class ToyOscRouter : IDisposable
             }
         }
         catch(SocketException) { Fault="OSC feedback unavailable"; session.Vrc.Reset(); return; }
+        SendPointerCursor(session);
         if(clearRevision!=session.ClearRevision) { feedback.Clear(); clearRevision=session.ClearRevision; }
         var frame = feedback.Frame(session.DisplayModel, session.Vrc.IsLive);
         frame["ShockerPage"]=session.ShockerPage ? 1 : 0;
@@ -100,6 +102,12 @@ internal sealed class ToyOscRouter : IDisposable
         frame["ShockReady"]=session.Shockers.Ready ? 1 : 0;
         frame["Online"] = session.Vrc.IsLive ? session.TestMode ? .5f : 1 : 0;
         frame["Pointer"] = session.PointerMode ? 1 : 0;
+        for(var hand=0;hand<2;hand++)
+        {
+            var p=session.Vrc.PointerPoints[hand]; var prefix="Pointer"+(hand==0 ? "L" : "R");
+            frame[prefix+"X"]=Math.Clamp(p.X/1240,0,1); frame[prefix+"Y"]=Math.Clamp(1-(p.Y-100)/608,0,1);
+            frame[prefix+"Valid"]=session.PointerMode && session.Vrc.IsLive && session.Vrc.PointerValid[hand] ? 1 : 0;
+        }
         var full = now - lastFull >= 1; if (full) lastFull = now;
         List<byte[]> messages = [];
         foreach (var (name, value) in frame)
@@ -109,6 +117,26 @@ internal sealed class ToyOscRouter : IDisposable
         }
         try { foreach (var chunk in messages.Chunk(16)) { var packet = Bundle(chunk); sender.Send(packet, packet.Length, destination); } }
         catch (SocketException) { Fault = "OSC feedback unavailable"; session.Vrc.Reset(); }
+    }
+    private void SendPointerCursor(ToyControlSession session)
+    {
+        // Cursor updates bypass the large graph-frame throttle (up to the UI's
+        // 30 Hz). Selection and the drawn cursor use the same projected point.
+        List<byte[]> packets=[];
+        for(var hand=0;hand<2;hand++)
+        {
+            var p=session.Vrc.PointerPoints[hand]; var prefix="Pointer"+(hand==0 ? "L" : "R");
+            Put(prefix+"X",Math.Clamp(p.X/1240,0,1)); Put(prefix+"Y",Math.Clamp(1-(p.Y-100)/608,0,1));
+            Put(prefix+"Valid",session.PointerMode && session.Vrc.IsLive && session.Vrc.PointerValid[hand] ? 1 : 0);
+        }
+        if(packets.Count==0) return;
+        try {var packet=Bundle(packets);sender.Send(packet,packet.Length,destination);}
+        catch(SocketException) {Fault="Pointer feedback unavailable";session.Vrc.Reset();}
+        void Put(string name,float value)
+        {
+            if(sent.TryGetValue(name,out var old) && old==value) return;
+            sent[name]=value;packets.Add(OscCodec.Encode("/avatar/parameters/"+ToyControlContract.ReceivePrefix+name,value));
+        }
     }
     internal static byte[] Bundle(IEnumerable<byte[]> messages)
     {

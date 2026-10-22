@@ -72,7 +72,7 @@ internal static class ShockerControlChecks
         check(!s.Armed,"hiding or losing the avatar cancels pending shock confirmation");
         Put("Visible",true); Put("InBeat",false); session.Tick(now); session.Action("InInputMode",false);
         void Point(string hand,float x,bool down)
-        { Put("InPointer"+hand+"X",x/1240); Put("InPointer"+hand+"Y",1-(308-100)/608f); Put("InPointer"+hand+"Hit",true); Put("InPointer"+hand+"Press",down); session.Tick(now); }
+        { PoseInput.Aim(Put,hand,x,308); Put("InPointer"+hand+"Press",down); session.Tick(now); }
         foreach(var hand in new[] { "L","R" })
         {
             var before=output.Count; Point(hand,1088,false); Point(hand,1088,true); Point(hand,878,true);

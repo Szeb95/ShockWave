@@ -55,6 +55,10 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Update fixture build failed.' }
           ./tests/update/bin/Release/net8.0-windows/Update.Checks.exe
           if ($LASTEXITCODE -ne 0) { throw 'Update checks failed.' }
+      - name: Check panel pointer and selection with simulated devices
+        run: |
+          dotnet run --project tests/toy-control/ToyControl.Checks.csproj -c Release -- work/panel-fixture-checks --warp
+          if ($LASTEXITCODE -ne 0) { throw 'Panel pointer checks failed.' }
       - name: Check remote ownership and SPS handoff with simulated toys
         run: |
           dotnet build tests/remote/Remote.Checks.csproj --configuration Release
