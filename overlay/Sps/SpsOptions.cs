@@ -54,14 +54,14 @@ internal sealed class SpsWireOptions : SpsOptionsForm
     private readonly CheckBox enabled=new() { Text="Connection enabled",AutoSize=true,Checked=true,ForeColor=Color.White };
     private readonly ComboBox input=new SettingChoiceInput() { DropDownStyle=ComboBoxStyle.DropDownList,BackColor=Input,ForeColor=Color.White,Width=490 };
     private readonly NumericUpDown gain=Number(0,1000,100), dead=Number(0,99,0), smooth=Number(0,2000,0), timeout=Number(250,10000,2000), min=Number(-1000,1000,0,3), max=Number(-1000,1000,1,3);
-    private readonly SpsHole hole;
+    private readonly SpsHole? hole;
     public bool Disconnect { get; private set; }
     private sealed record InputChoice(string Label,List<string> Addresses) { public override string ToString()=>Label; }
     public SpsWire Value => original with { Enabled=enabled.Checked,Response=motion.Checked?SpsResponse.Motion:SpsResponse.Level,
         ExactInputs=((InputChoice)input.SelectedItem!).Addresses.ToList(),Gain=(double)gain.Value/100,DeadZone=(int)dead.Value,SmoothingMs=(int)smooth.Value,TimeoutMs=(int)timeout.Value,InputMin=(double)min.Value,InputMax=(double)max.Value };
-    public SpsWireOptions(SpsWire wire,SpsHole hole,string function) : base("Connection options",new(560,510))
+    public SpsWireOptions(SpsWire wire,SpsHole? hole,string function,bool automatic=false) : base(automatic?"Toy SPS options":"Connection options",new(560,510))
     {
-        original=wire; this.hole=hole; Row(Label(function+" → "+hole.Name,true),38); Row(Label("Choose how this connection drives motor power."),30);
+        original=wire; this.hole=hole; Row(Label(function+" → "+(hole?.Name??"all holes"),true),38); Row(Label(automatic?"Applies to this function across all permitted holes.":"Choose how this connection drives motor power."),30);
         input.DrawMode=DrawMode.OwnerDrawFixed; input.ItemHeight=24;
         input.DrawItem+=(_,e)=> { using var background=new SolidBrush(Input); e.Graphics.FillRectangle(background,e.Bounds); TextRenderer.DrawText(e.Graphics,e.Index>=0?input.Items[e.Index]?.ToString()??"":"",input.Font,e.Bounds,Color.White,TextFormatFlags.Left|TextFormatFlags.VerticalCenter); };
         var modes=Flow(); depth.Margin=new(0,8,32,0); motion.Margin=new(0,8,0,0); modes.Controls.AddRange([depth,motion]); Row(modes,42);
@@ -69,16 +69,16 @@ internal sealed class SpsWireOptions : SpsOptionsForm
         Row(Label("Depth uses insertion/contact level. Movement uses its change per second."),32);
         input.Items.Add(new InputChoice("All permitted interactions",[]));
         if(wire.ExactInputs.Count>0) input.Items.Add(new InputChoice("Imported exact input: "+(SpsSignals.Describe(wire.ExactInputs[0])?.Measurement ?? "custom level"),wire.ExactInputs));
-        foreach(var address in hole.Inputs) input.Items.Add(new InputChoice(SpsSignals.Describe(address) is { } signal ? signal.Interaction+" · "+signal.Measurement : "Custom level",[address]));
-        input.SelectedIndex=wire.ExactInputs.Count>0?1:0; Row(input,38);
+        foreach(var address in hole?.Inputs??[]) input.Items.Add(new InputChoice(SpsSignals.Describe(address) is { } signal ? signal.Interaction+" · "+signal.Measurement : "Custom level",[address]));
+        input.SelectedIndex=wire.ExactInputs.Count>0?1:0; input.Visible=!automatic; Row(input,automatic?0:38);
         var fields=new TableLayoutPanel { ColumnCount=4,RowCount=3,Dock=DockStyle.Fill,Margin=Padding.Empty };
         fields.ColumnStyles.Add(new(SizeType.Percent,27)); fields.ColumnStyles.Add(new(SizeType.Percent,23)); fields.ColumnStyles.Add(new(SizeType.Percent,27)); fields.ColumnStyles.Add(new(SizeType.Percent,23));
         void Field(string text,Control control,int col,int row) { fields.Controls.Add(Label(text),col,row); control.Margin=new(0,4,8,4); fields.Controls.Add(control,col+1,row); }
         Field("Scale %",gain,0,0); Field("Dead zone %",dead,2,0); Field("Smoothing ms",smooth,0,1); Field("Expiry ms",timeout,2,1); Field("Input min",min,0,2); Field("Input max",max,2,2);
         gain.Value=(decimal)wire.Gain*100; dead.Value=wire.DeadZone; smooth.Value=wire.SmoothingMs; timeout.Value=wire.TimeoutMs; min.Value=(decimal)wire.InputMin; max.Value=(decimal)wire.InputMax;
-        Row(fields,115); Row(Label(hole.Kind=="Socket"?"Socket root + tip contacts calibrate depth during approach. Raw exact inputs retain their original meaning.":"Toy panel sensitivity, maximum and Test mode still apply."),52);
-        var actions=Flow(); actions.Controls.Add(Button("Disconnect",()=> { Disconnect=true; DialogResult=DialogResult.OK; }));
-        actions.Controls.Add(Button("Apply",()=> { try { SpsStore.Validate([new() { Name=hole.Name,Address=hole.Inputs[0],Targets=[wire.Target],Response=Value.Response,Gain=Value.Gain,InputMin=Value.InputMin,InputMax=Value.InputMax,DeadZone=Value.DeadZone,SmoothingMs=Value.SmoothingMs,TimeoutMs=Value.TimeoutMs }]); DialogResult=DialogResult.OK; } catch(InvalidDataException e) { MessageBox.Show(this,e.Message,"Connection options"); } },true));
+        Row(fields,115); Row(Label(hole?.Kind=="Socket"?"Socket root + tip contacts calibrate depth during approach. Raw exact inputs retain their original meaning.":"Toy panel sensitivity, maximum and Test mode still apply."),52);
+        var actions=Flow(); if(!automatic) actions.Controls.Add(Button("Disconnect",()=> { Disconnect=true; DialogResult=DialogResult.OK; }));
+        actions.Controls.Add(Button("Apply",()=> { try { if(automatic) SpsBoardStore.ValidateAutomatic(Value); else SpsStore.Validate([new() { Name=hole!.Name,Address=hole.Inputs[0],Targets=[wire.Target],Response=Value.Response,Gain=Value.Gain,InputMin=Value.InputMin,InputMax=Value.InputMax,DeadZone=Value.DeadZone,SmoothingMs=Value.SmoothingMs,TimeoutMs=Value.TimeoutMs }]); DialogResult=DialogResult.OK; } catch(InvalidDataException e) { MessageBox.Show(this,e.Message,"Connection options"); } },true));
         var cancel=Button("Cancel",()=>DialogResult=DialogResult.Cancel); actions.Controls.Add(cancel); CancelButton=cancel; Row(actions,46);
     }
     private static NumericUpDown Number(decimal minimum,decimal maximum,decimal value,int places=0) => new SettingNumberInput() { Minimum=minimum,Maximum=maximum,Value=value,DecimalPlaces=places,Increment=places>0?.05m:1,BackColor=Input,ForeColor=Color.White,Width=85 };

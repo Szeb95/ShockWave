@@ -2,9 +2,19 @@
 
 Use the **Connect** page between **SPS** and **Log**. Both people run this version of ShockWave. Commands go to the other app; that app operates its own Bluetooth toys and configured shocker service. Your app never attempts a Bluetooth connection to your friend's toys.
 
+## Saved friends (0.7.7 and later)
+
+Both people need the saved-friends update. Choose **Pair a new friend using a code**, connect using the steps below, optionally enter a local friend name, and press **Save friend** on either app. The authenticated connection saves a separate pairing key on both apps. Each person can rename their own entry; names are not shared. Up to 32 friends can be remembered, with one active connection at a time.
+
+Next time, choose the saved friend and press **Connect** on both apps. No new code is needed after restarting or after the original code expires. Connect defaults **off** after an app restart. While both remain enabled, the selected friends retry automatically. **Disconnect** stops the session while retaining the pairing. **Forget friend** disconnects the active session and removes that saved access; pairing again requires a fresh code. The other app may retain its own entry, but the old key and retired original code cannot reconnect to the person who forgot it.
+
+The stable app identity, names and per-friend keys are protected by Windows for the current user in `%LOCALAPPDATA%/SzebsToys/remote-friends.bin`, separately from provider tokens. Existing keys cannot be silently replaced by a new pairing. Unreadable data is preserved and Connect stays off; failed saves are reported. An interrupted/unconfirmed save can leave a local entry: if it cannot connect, forget it and pair again using a fresh code. Do not copy the protected file between Windows users or PCs.
+
+Saved pairing uses the existing public setup helper, STUN and direct encrypted traffic, without accounts, own hosting or TURN. The setup helper can see the stable setup identity across app restarts; direct peers still see each other's address. Reconnection restores inventory with fresh session aliases and zero activity. Drawing/Play or a new shocker action is still required; limits, owner Stop, Test mode and the 500/250 ms freshness rules remain unchanged.
+
 ## Connect
 
-1. One person leaves **Friend's connection code** empty and selects **Connect**.
+1. Choose **Pair a new friend using a code**. One person leaves **Friend's connection code** empty and selects **Connect**.
 2. They select **Copy my code** and send it privately to their friend.
 3. The friend pastes it into **Friend's connection code** and selects **Connect**.
 4. Wait for **Connected · encrypted direct app-to-app**. Each person's connected supported functions appear together in **Toy control**, with remote names starting with **Remote**. Configured remote shockers appear in **Shocker control**. Connecting starts no output.

@@ -26,11 +26,102 @@ internal static class Program
         {
             if(args.SequenceEqual(new[] { "--read-vrchat" })) return LiveQuery();
             if(args.SequenceEqual(new[] { "--reproduce-pump" })) return PumpReproduction();
-            Defaults(); ScanRouting(); ReleaseOrdering(); RecordRecovery(); AllRouting(); ReceivedInputs(); DiscoveryWithoutListener(); Discovery(); Parsing(); Mapping(); Automatic(); Ownership(); Faults(); Timing(); ZeroCrossings(); Storage(); Socket(); BoardModel(); Depth(); Query(); LiveRows(); Ui();
+            Defaults(); AutomaticLayout(); GlobalSources(); ActivationStates(); ScanRouting(); ReleaseOrdering(); RecordRecovery(); AllRouting(); ReceivedInputs(); DiscoveryWithoutListener(); Discovery(); Parsing(); Mapping(); Automatic(); Ownership(); Faults(); Timing(); ZeroCrossings(); Storage(); Socket(); BoardModel(); Depth(); Query(); LiveRows(); Ui();
             File.WriteAllText(Path.Combine(artifacts, "report.json"), JsonSerializer.Serialize(new { Passed = passed, PhysicalDevice = false, NativeDll = false, VrChat = false }));
             Console.WriteLine($"SPS: {passed} checks passed"); return 0;
         }
         catch (Exception error) { Console.Error.WriteLine(error); File.WriteAllText(Path.Combine(artifacts, "failure.txt"), error.ToString()); return 1; }
+    }
+    private static void ActivationStates()
+    {
+        const string stem="/avatar/parameters/OGB/Orf/Mouth";
+        OscMessage[] contacts=[new(stem+"/PenSelfNewTip",[0f])];
+        var on=SpsActivation.Resolve(contacts,[new("/avatar/parameters/VF123_Mouth",[true])]);
+        Check(on.TryGetValue(stem,out var enabled) && enabled,"zero-contact socket resolves its unique VRCFury On switch independently of penetration");
+        var state=new SpsActivation(); state.Apply(on,10);
+        Check(state.Get(stem,10.1)==true && state.Get(stem,12.01) is null,"socket On display expires without a fresh query");
+        state.Apply(new Dictionary<string,bool> {{stem,false}},9);
+        Check(state.Get(stem,10.2)==true,"older enable-state frames cannot replace a newer state");
+        state.Apply(new Dictionary<string,bool> {{stem,false}},11);
+        Check(state.Get(stem,11.1)==false,"explicit socket Off is separate from unknown state");
+        state.Reset(); Check(state.Get(stem,11.2) is null,"reset clears enabled indicators");
+        Check(SpsActivation.Resolve(contacts,[new("/avatar/parameters/VF1_Mouth",[true]),new("/avatar/parameters/VF2_Mouth",[false])]).Count==0,
+            "ambiguous same-name menu switches do not claim socket state");
+        Check(SpsActivation.Resolve(contacts,[new("/avatar/parameters/MouthOpen",[true]),new("/avatar/parameters/VF1_Mouth",[1f])]).Count==0,
+            "unrelated face inputs and floats cannot become socket On indicators");
+        var nodes=new Dictionary<string,object> {
+            ["tip"]=new {FULL_PATH=stem+"/PenSelfNewTip",TYPE="f",ACCESS=3,VALUE=new[]{0f}},
+            ["enable"]=new {FULL_PATH="/avatar/parameters/VF10_Mouth",TYPE="T",ACCESS=3,VALUE=new[]{true}}
+        };
+        using var json=JsonDocument.Parse(JsonSerializer.Serialize(new { CONTENTS=new { change=new {VALUE=new[]{"activation-fixture"}},parameters=new {CONTENTS=nodes} } }));
+        var frame=SpsOscQuery.Parse(json.RootElement,10,10);
+        Check(frame.Messages.Length==1 && frame.SocketEnabled.GetValueOrDefault(stem) && frame.Messages.All(m=>m.Address!= "/avatar/parameters/VF10_Mouth"),
+            "query enable switches remain display metadata and never become routing inputs");
+    }
+    private static void AutomaticLayout()
+    {
+        var storePath=Path.Combine(artifacts,"automatic-layout.json"); var boardPath=Path.ChangeExtension(storePath,".board.json");
+        File.Delete(storePath); File.Delete(boardPath); var boardStore=new SpsBoardStore(boardPath);
+        Check(boardStore.Load([]).AllToysToAllHoles,"a fresh SPS setup defaults All toys to all holes on");
+        Check(!boardStore.Load([],legacyFileExists:true).AllToysToAllHoles,"an existing legacy setup retains manual routing");
+        const string root="/avatar/parameters/OGB/Orf/Mouth/PenOthersNewRoot",tip="/avatar/parameters/OGB/Orf/Mouth/PenOthersNewTip";
+        var graph=SpsBoardModel.FromRules([Rule(tip) with { RootAddress=root }]);
+        graph.Holes[0].Inputs.Add(root);
+        SpsBoardModel.Discover(graph,SpsSignals.Describe("/avatar/parameters/OGB/Orf/Anal/TouchOthers")!);
+        SpsBoardModel.Discover(graph,SpsSignals.Describe("/avatar/parameters/OGB/Orf/Anal/TouchSelf")!);
+        SpsBoardModel.Discover(graph,SpsSignals.Describe("/avatar/parameters/OGB/Orf/Pussy/TouchOthers")!);
+        boardStore.Save(graph); Check(!boardStore.Load([]).AllToysToAllHoles,"a saved explicit manual setting is preserved");
+        graph=graph with { AllToysToAllHoles=true }; boardStore.Save(graph);
+        var manual=JsonSerializer.Serialize(graph.Wires);
+        using var toys=new LocalToysPage(_=>new FakeAdapter());
+        using var page=new SpsPage(toys,()=>true,new SpsStore(storePath)); page.Size=new(1240,608); page.PerformLayout(); _=page.Handle;
+        toys.StartRememberedConnections(); while(toys.Busy) {Application.DoEvents();Thread.Sleep(5);}
+        page.Tick(); var board=page.Board;
+        Check(board.AutomaticPanel.Visible && board.AutomaticPanel.Cards.Count==3,"automatic mode replaces the human with the added hole settings list");
+        Check(board.AutomaticPanel.SourceOptions.Switches.Count==6 && Descendants(board.AutomaticPanel).OfType<ThemeToggle>().Count()==6,
+            "automatic mode presents exactly one shared set of six source switches for all holes");
+        var now=ToyOscRouter.Clock;
+        page.ReceiveQuery(QueryFrame("automatic-fixture",0,0,now) with { SocketEnabled=new Dictionary<string,bool> {
+            [SpsBoardModel.Stem(tip)]=true,[graph.Holes[1].Stem]=false } });
+        Thread.Sleep(35); page.Tick();
+        Check(board.HoleEnabled!(page.Document.Holes[0])==true && !board.HoleActive!(page.Document.Holes[0]) && page.Session.ActiveTargets==0,
+            "socket On is green with no penetrator and cannot create output");
+        var manualHoles=JsonSerializer.Serialize(graph.Holes);
+        board.AutomaticPanel.SourceOptions.Switches[SpsSources.MyPlugs].Checked=false;
+        Check(page.Document.AutomaticSources== (SpsSources.All & ~SpsSources.MyPlugs) && SpsBoardStore.Read(boardPath).AutomaticSources==page.Document.AutomaticSources
+            && JsonSerializer.Serialize(page.Document.Holes)==manualHoles,"the shared switches persist globally without changing manual hole settings or positions");
+        page.Receive(new("/avatar/parameters/OGB/Orf/Anal/TouchSelf",[.5f]),ToyOscRouter.Clock);
+        Check(board.HoleActive!(page.Document.Holes[1]),"automatic contact indicators use the shared switches rather than saved manual filters");
+        board.AutomaticPanel.SourceOptions.Switches[SpsSources.MyBody].Checked=false;
+        Check(!board.HoleActive!(page.Document.Holes[1]) && page.Session.Rules.All(r=>!r.Address.EndsWith("/TouchSelf")),
+            "disabling one shared source removes both its contact display and automatic routes");
+        board.AutomaticPanel.SourceOptions.Switches[SpsSources.MyBody].Checked=true;
+        page.Receive(new("/avatar/parameters/OGB/Orf/Anal/TouchSelf",[0f]),ToyOscRouter.Clock);
+        var toy=board.Rows.First().Target; var gear=board.ToyGearBox(0);
+        Check(gear.Left>board.LeftBox.Right && board.RightBox.Contains(gear) && !board.AutomaticPanel.Bounds.IntersectsWith(Rectangle.Round(gear)),
+            "automatic toy gear sits inside the right panel beside its toy, outside the toy list and hole cards");
+        page.OptionsPresenter=options=> { Check(options is SpsWireOptions && options.Text=="Toy SPS options","automatic gear opens that function's SPS settings");
+            Field<RadioButton>(options,"motion").Checked=true; Click(Descendants(options).OfType<Button>().Single(b=>b.Text=="Apply")); };
+        Tap(board,Center(gear));
+        Check(page.Document.AutomaticToyOptions.Single().Target==toy && page.Document.AutomaticToyOptions[0].Response==SpsResponse.Motion
+            && page.Session.Rules.Where(r=>r.Targets.Contains(toy)).All(r=>r.Response==SpsResponse.Motion),
+            "automatic response settings apply only to the selected toy function");
+        Check(page.Session.Rules.Where(r=>!r.Targets.Contains(toy)).All(r=>r.Response==SpsResponse.Level) && JsonSerializer.Serialize(page.Document.Wires)==manual,
+            "other automatic functions and saved manual connections keep their settings");
+        var settingsBefore=File.ReadAllText(boardPath); page.OptionsPresenter=options=>options.DialogResult=DialogResult.Cancel; Tap(board,Center(gear));
+        Check(File.ReadAllText(boardPath)==settingsBefore,"Cancel on automatic toy options preserves saved routing");
+        foreach(var width in new[]{1240,1040,790})
+        {
+            page.Size=new(width,608); page.PerformLayout(); Thread.Sleep(35); page.Tick();
+            Check(board.RightBox.Contains(board.ToyGearBox(0)) && board.AutomaticPanel.Width>200 && board.AutomaticPanel.Cards.All(c=>c.Width>150),
+                "automatic gears and visible hole settings fit at "+width+"px");
+            using var image=Capture(board); image.Save(Path.Combine(artifacts,"sps-automatic-"+width+".png"));
+        }
+        Tap(board,Center(board.AllToysBox));
+        Check(!page.Document.AllToysToAllHoles && !board.AutomaticPanel.Visible && board.ManualHintBox.Right<=board.StatusBox.Left
+            && JsonSerializer.Serialize(page.Document.Wires)==manual,"manual mode restores the map/lines with a hint immediately left of SPS connection status");
+        using(var image=Capture(board)) image.Save(Path.Combine(artifacts,"sps-manual-hint.png"));
+        page.Shutdown(); File.Delete(boardPath);
     }
     private static int PumpReproduction()
     {
@@ -97,7 +188,7 @@ internal static class Program
                 PumpNativeWrites=pumpWrites,MotorRequest=motor.RequestedPercent,MotorNativeWrites=f.Adapter.Writes.Count(w=>w.Channel=="v1" && w.Value>0),Reproduced=broken });
             Console.WriteLine($"{(broken?"REPRODUCED":"NOT REPRODUCED")} {(allHoles?"all holes":"manual links")}, {mode}, {(movingMotor?"moving":"steady")} SPS motor: pump selected={selectedImmediately}->{selected}, curve owns pump={curveOwnsPump}, looping={loops}, motor stays SPS={spsOwnsMotor}");
         }
-        File.WriteAllText(Path.Combine(artifacts,"pump-reproduction.json"),JsonSerializer.Serialize(new { Baseline="shockwave-pointer-stable",PhysicalOutput=false,ProductionBehaviorChanged=false,Cases=cases },new JsonSerializerOptions { WriteIndented=true }));
+        File.WriteAllText(Path.Combine(artifacts,"pump-reproduction.json"),JsonSerializer.Serialize(new { Source="current working source",PhysicalOutput=false,Cases=cases },new JsonSerializerOptions { WriteIndented=true }));
         return 0;
     }
     private static void Parsing()
@@ -351,6 +442,39 @@ internal static class Program
         var many=Enumerable.Range(0,256).Select(i=>new SpsTarget("synthetic-"+i,"v1")).ToArray();
         Check(SpsBoardModel.Compile(board,many).Count==2,"256 automatic target functions use bounded shared contact rules");
         File.Delete(file);
+    }
+    private static void GlobalSources()
+    {
+        var graph=new SpsBoardDocument(1,false,[],[]) { AllToysToAllHoles=true };
+        foreach(var kind in new[]{"Pen","Orf"}) foreach(var zone in new[]{"One","Two"})
+        {
+            foreach(var field in new[]{"TouchOthers","TouchSelf","PenOthers","PenSelf","FrotOthers"})
+                SpsBoardModel.Discover(graph,SpsSignals.Describe($"/avatar/parameters/OGB/{kind}/{zone}/{field}")!);
+            graph.Holes[^1]=graph.Holes[^1] with { Sources=zone=="One"?0:SpsSources.All };
+        }
+        SpsTarget[] targets=[new("fixture","v1"),new("fixture","v2")];
+        var original=JsonSerializer.Serialize(graph.Holes);
+        foreach(var source in new[]{SpsSources.OtherSockets,SpsSources.OtherBody,SpsSources.OtherPlugs,SpsSources.MySockets,SpsSources.MyBody,SpsSources.MyPlugs})
+        {
+            var rules=SpsBoardModel.Compile(graph with { AutomaticSources=source },targets);
+            var expected=graph.Holes.SelectMany(h=>h.Inputs).Where(a=>SpsBoardModel.Source(SpsSignals.Describe(a)!)==source).Order().ToArray();
+            Check(expected.Length>=2 && rules.Select(r=>r.Address).Order().SequenceEqual(expected) && rules.All(r=>r.Targets.Count==2),
+                source+" applies to every applicable hole and toy, independently of manual filters");
+        }
+        Check(SpsBoardModel.Compile(graph with {AutomaticSources=0},targets).Count==0,"all six shared switches off excludes every recognized contact");
+        var expanded=graph.Copy() with {AutomaticSources=SpsSources.MyPlugs};
+        const string added="/avatar/parameters/OGB/Orf/NewSocket/PenSelf";
+        SpsBoardModel.Discover(expanded,SpsSignals.Describe(added)!);
+        Check(SpsBoardModel.Compile(expanded,targets).Any(r=>r.Address==added),"newly added holes immediately inherit the same global interaction choices");
+        var manual=graph with {AllToysToAllHoles=false,AutomaticSources=SpsSources.MyPlugs};
+        foreach(var hole in manual.Holes) manual.Wires.Add(new() { HoleId=hole.Id,Target=targets[0] });
+        Check(SpsBoardModel.Compile(manual).All(r=>r.Address.Contains("/Two/")) && JsonSerializer.Serialize(graph.Holes)==original,
+            "manual routing keeps its per-hole filters despite the saved shared switches");
+        var file=Path.Combine(artifacts,"global-sources.json"); var stored=graph with {AutomaticSources=0};
+        SpsBoardStore.Export(file,stored); stored=SpsBoardStore.Read(file);
+        Check(stored.AutomaticSources==0 && SpsBoardModel.Compile(stored,targets).Count==0,"saved all-off is preserved instead of inheriting old manual filters");
+        var rejected=false; try {SpsBoardStore.Validate(stored with {AutomaticSources=(SpsSources)64});} catch(InvalidDataException) {rejected=true;}
+        Check(rejected,"unknown global source bits are rejected"); File.Delete(file);
     }
     private static void ReceivedInputs()
     {
@@ -724,6 +848,7 @@ internal static class Program
     {
         var adapter = new FakeAdapter(); using var toys = new LocalToysPage(_ => adapter); var store = new SpsStore(Path.Combine(artifacts, "ui-mappings.json"));
         var boardFile = Path.ChangeExtension(store.PathName, ".board.json"); File.Delete(store.PathName); File.Delete(boardFile);
+        SpsBoardStore.Export(boardFile,new SpsBoardDocument(1,false,[],[]));
         using var form = new OverlayForm(new BridgeConfig(), initialSaveConfig: _ => { }, initialLocalToys: toys, initialSpsStore: store);
         var sps = Field<SpsPage>(form, "spsPage"); var nav = Field<Button>(form, "spsNav"); var toyNav = Field<Button>(form, "toyControlNav"); var logNav = Field<Button>(form, "logsNav");
         Check(nav.Top > toyNav.Top && nav.Top < logNav.Top, "SPS navigation stays between Toy control and Log");
@@ -883,7 +1008,9 @@ internal static class Program
         sps.Tick(); Thread.Sleep(5); sps.Receive(new(chest,[.5f]),ToyOscRouter.Clock); sps.Tick();
         Check(toys.Controller.State("fixture","v1").RequestedPercent==50 && toys.Controller.State("fixture","v2").RequestedPercent==50,"releasing all assigned contacts rearms all-holes mode after Stop");
         adapter.AddMotor(); sps.Tick();
-        Check(sps.Session.Rules.All(r=>r.Targets.Count==3) && sps.Session.ActiveTargets==0,"a newly reported scalar function joins all-holes mode behind a fresh-input barrier");
+        Check(sps.Session.Rules.All(r=>r.Targets.Count==3) && toys.Controller.State("fixture","v3").RequestedPercent==0
+            && new[]{"v1","v2"}.All(c=>toys.Controller.State("fixture",c).RequestedPercent==50),
+            "a newly reported scalar function needs fresh input while unchanged automatic functions continue");
         Thread.Sleep(5); sps.Receive(new(chest,[.6f]),ToyOscRouter.Clock); sps.Tick();
         Check(new[] {"v1","v2","v3"}.All(c=>toys.Controller.State("fixture",c).RequestedPercent==60),"fresh contact drives the new function together with existing automatic targets");
         var beforeAuto=board.Dock; board.Dock=DockStyle.None; board.Size=new(1240,608);

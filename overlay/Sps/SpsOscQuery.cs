@@ -10,6 +10,7 @@ namespace ShockWave.Overlay.Sps;
 internal sealed record SpsQueryFrame(string Avatar, OscMessage[] Messages, double RequestedAt, double ReceivedAt)
 {
     public OscMessage[] DiscoveryMessages { get; init; }=[];
+    public IReadOnlyDictionary<string,bool> SocketEnabled { get; init; }=new Dictionary<string,bool>();
 }
 
 // Read-only local VRChat snapshots. No OSC sender, server, registration, token or
@@ -113,6 +114,7 @@ internal sealed class SpsOscQuery : IDisposable
         if(id.Length is 0 or >256 || id.Any(char.IsControl)) throw new InvalidDataException("Invalid avatar identity.");
         var values=new Dictionary<string,OscMessage>(StringComparer.Ordinal);
         var discovered=new Dictionary<string,OscMessage>(StringComparer.Ordinal); var nodes=0;
+        var switches=new List<OscMessage>(); var switchOverflow=false;
         void Walk(JsonElement node,int depth)
         {
             if(++nodes>8192 || depth>16 || node.ValueKind!=JsonValueKind.Object) throw new InvalidDataException("OSCQuery tree too large.");
@@ -144,13 +146,23 @@ internal sealed class SpsOscQuery : IDisposable
                 };
                 if(candidateValue is not null && discovered.Count<256) discovered.TryAdd(candidatePath.GetString()!,new(candidatePath.GetString()!,[candidateValue]));
             }
+            if(node.TryGetProperty("FULL_PATH",out var switchPath) && switchPath.ValueKind==JsonValueKind.String
+                && SpsSignals.SafeAddress(switchPath.GetString()!)
+                && node.TryGetProperty("ACCESS",out var switchAccess) && switchAccess.TryGetInt32(out var switchFlags) && (switchFlags&1)!=0
+                && node.TryGetProperty("TYPE",out var switchType) && switchType.ValueKind==JsonValueKind.String && switchType.GetString() is "T" or "F"
+                && node.TryGetProperty("VALUE",out var switchValue) && switchValue.ValueKind==JsonValueKind.Array && switchValue.GetArrayLength()==1
+                && switchValue[0].ValueKind is JsonValueKind.True or JsonValueKind.False)
+            {
+                if(switches.Count<512) switches.Add(new(switchPath.GetString()!,[switchValue[0].GetBoolean()])); else switchOverflow=true;
+            }
             if(node.TryGetProperty("CONTENTS",out var children))
             {
                 if(children.ValueKind!=JsonValueKind.Object) throw new InvalidDataException("Invalid contact tree.");
                 foreach(var child in children.EnumerateObject()) Walk(child.Value,depth+1);
             }
         }
-        Walk(parameters,0); return new(id,values.Values.ToArray(),requested,received) { DiscoveryMessages=discovered.Values.ToArray() };
+        Walk(parameters,0); return new(id,values.Values.ToArray(),requested,received) { DiscoveryMessages=discovered.Values.ToArray(),
+            SocketEnabled=switchOverflow?new Dictionary<string,bool>():SpsActivation.Resolve(values.Values,switches) };
     }
     public void Reset()
     {

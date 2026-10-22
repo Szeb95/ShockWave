@@ -5,7 +5,7 @@ using ShockWave.Overlay;
 using ShockWave.Overlay.Toys;
 using ShockWave.Overlay.Sps;
 
-internal static class Program
+internal static partial class Program
 {
     private static int passed;
     private static string artifacts = "";
@@ -15,11 +15,12 @@ internal static class Program
         Application.EnableVisualStyles();
         try
         {
-            if (args.Contains("--log-stress")) LogStress();
-            else { Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); Panel(); }
+            if (args.Contains("--friends-internet")) FriendInternet();
+            else if (args.Contains("--log-stress")) LogStress();
+            else { Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); FriendStorage(); FriendPage(); Panel(); }
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
-            File.WriteAllText(Path.Combine(artifacts, args.Contains("--log-stress") ? "log-stress-report.json" : "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
+            File.WriteAllText(Path.Combine(artifacts, args.Contains("--friends-internet") ? "friends-internet-report.json" : args.Contains("--log-stress") ? "log-stress-report.json" : "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet") || args.Contains("--friends-internet"), PackagedStartup = args.Contains("--package-startup") }));
             Console.WriteLine($"Remote connection: {passed} checks passed"); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); File.WriteAllText(Path.Combine(artifacts,"native-failure.txt"),e.ToString()); return 1; }
@@ -484,7 +485,7 @@ internal static class Program
     {
         public Adapter Adapter { get; } public BridgeConfig Config { get; } = new(); public LocalToyController Controller { get; }
         public RemoteSession Session { get; }
-        public Fixture(int count=1) { Adapter=new(count); Controller=new(Adapter,new LocalToyControlStore(),true); Controller.SetTestMode(false); Session=new(()=>Adapter.Snapshot,()=>Controller,()=>Config,(_,_,_,_,_)=>{}); }
+        public Fixture(int count=1, IRemoteFriendStore? friends=null) { Adapter=new(count); Controller=new(Adapter,new LocalToyControlStore(),true); Controller.SetTestMode(false); Session=new(()=>Adapter.Snapshot,()=>Controller,()=>Config,(_,_,_,_,_)=>{},friends); }
         public void Dispose() { Session.Dispose(); Controller.DisposeAsync().AsTask().GetAwaiter().GetResult(); }
     }
     private sealed class Adapter : ILocalToyAdapter, ILocalToyOutput

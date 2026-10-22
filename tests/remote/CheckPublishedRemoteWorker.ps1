@@ -2,7 +2,7 @@ param([Parameter(Mandatory = $true)][string]$PackageDirectory)
 
 $ErrorActionPreference = 'Stop'
 $remoteCheckRoot = (Resolve-Path -LiteralPath $PackageDirectory).Path
-foreach ($remoteCheckRequired in @('node.exe', 'bridge/remote-worker.mjs', 'bridge/remote-peer.mjs')) {
+foreach ($remoteCheckRequired in @('node.exe', 'bridge/remote-worker.mjs', 'bridge/remote-peer.mjs', 'bridge/remote-friends.mjs')) {
     if (-not (Test-Path -LiteralPath (Join-Path $remoteCheckRoot $remoteCheckRequired) -PathType Leaf)) {
         throw "The remote package is incomplete: $remoteCheckRequired"
     }

@@ -4,7 +4,7 @@ Repository: **https://github.com/Szeb95/ShockWave**, public source repository ow
 
 First public release: **[ShockWave 0.7.0](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.0)**. The app's **[latest-release link](https://github.com/Szeb95/ShockWave/releases/latest)** is live. The uploaded Windows ZIP is the tested local 0.7.0 package, **116,014,214 bytes**, SHA-256 `f443b7fb11cf8d09e70188379ab9007f2774fc08d16d0ffe1e8fd8316e31f810`.
 
-**Current update:** [ShockWave 0.7.2](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.2) fixes remote selection loss and fresh SPS handoff, plus consecutive remote gestures. It is latest/stable, hosted ownership regressions pass, and the production updater has anonymously downloaded and verified its full package for a 0.7.1 version using an isolated fixture. Both apps should update; saved preferences and Unity installations are unchanged.
+**0.7.7 update:** automatic SPS now has shared source switches, per-function gears and socket On display, with the pump-selection correction. Connect adds saved friends protected by Windows. Both friends need 0.7.7 or later for saved pairing. See the newest [workstream status](lovense-remote/STATUS.md) entry for package, publication and public-updater verification. Existing preferences and Unity installations are preserved.
 
 ## Current state
 

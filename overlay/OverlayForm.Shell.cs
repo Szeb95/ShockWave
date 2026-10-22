@@ -92,7 +92,8 @@ internal sealed partial class OverlayForm : Form
     };
 
     public OverlayForm(BridgeConfig? initialConfig = null, TokenStore? initialTokenStore = null, Action<BridgeConfig>? initialSaveConfig = null,
-        LocalToysPage? initialLocalToys = null, Sps.SpsStore? initialSpsStore = null, Updates.AppUpdater? initialUpdater = null)
+        LocalToysPage? initialLocalToys = null, Sps.SpsStore? initialSpsStore = null, Updates.AppUpdater? initialUpdater = null,
+        IRemoteFriendStore? initialRemoteFriends = null)
     {
         localToysPage = initialLocalToys ?? new LocalToysPage();
         config = initialConfig ?? BridgeConfig.Load(bridgeDirectory);
@@ -100,7 +101,8 @@ internal sealed partial class OverlayForm : Form
         updatePage = new UpdatePage(updater);
         toyControlPage = new(localToysPage, ForwardOscToBridge);
         spsPage = new(localToysPage, () => toyControlPage.Listening, initialSpsStore, () => toyControlPage.AvatarPort);
-        remoteSession = new(() => localToysPage.Snapshot, () => localToysPage.Controller, () => config, SendRemoteShocker);
+        remoteSession = new(() => localToysPage.Snapshot, () => localToysPage.Controller, () => config, SendRemoteShocker,
+            initialRemoteFriends ?? (initialConfig is null ? new RemoteFriendStore(Path.Combine(Path.GetDirectoryName(BridgeConfig.ConfigPath)!, "remote-friends.bin")) : new MemoryRemoteFriendStore()));
         remotePage = new(remoteSession, NodePath, bridgeDirectory);
         toyControlPage.Session.Remote = remoteSession.Toys;
         toyControlPage.Session.Shockers.Inventory = ShockerControlInventory;

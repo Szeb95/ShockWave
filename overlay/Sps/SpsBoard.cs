@@ -8,13 +8,16 @@ internal sealed class SpsBoard : Control
 {
     private static readonly Color Background = Color.FromArgb(30,31,34), LeftSurface = Color.FromArgb(16,17,19), Surface = Color.FromArgb(41,43,47),
         Input = Color.FromArgb(54,57,63), White = Color.FromArgb(242,243,245), Muted = Color.FromArgb(181,186,193), Accent = Color.FromArgb(16,163,127);
-    public SpsBoardDocument Document { get; set; } = new(1, false, [], []);
+    private SpsBoardDocument document=new(1,false,[],[]);
+    public SpsBoardDocument Document { get=>document; set { document=value; RefreshAutomaticView(); } }
     public IReadOnlyList<SpsToyRow> Rows { get; set; } = [];
     public string Status { get; set; } = "WAITING FOR SPS";
     public string StatusDetail { get; set; } = "Automatic · waiting for avatar inputs";
     public Func<SpsHole, double>? HoleLevel { get; set; }
     public Func<SpsHole, string>? HoleState { get; set; }
     public Func<SpsHole, bool>? HoleActive { get; set; }
+    public Func<SpsHole,bool?>? HoleEnabled { get; set; }
+    internal SpsAutomaticPanel AutomaticPanel { get; }=new();
     public bool DiscoveryMode { get; private set; }
     public IReadOnlyList<SpsDiscoveryRow> Discoveries { get; set; }=[];
     private int discoveryPage;
@@ -33,6 +36,8 @@ internal sealed class SpsBoard : Control
     public event Action? LockRequested, StopRequested, ClearRequested, SetupRequested, AllToysRequested;
     public event Action? DiscoveryRequested;
     public event Action<string>? DiscoveryAddRequested;
+    public event Action<SpsSources>? AutomaticSourcesRequested;
+    public event Action<SpsTarget>? ToyOptionsRequested;
     private string? moving, pickedWire;
     private SpsTarget? connecting;
     private Point start, pointer;
@@ -47,6 +52,9 @@ internal sealed class SpsBoard : Control
     internal RectangleF LockBox => new(RightBox.Right - 126 * UiScale, RightBox.Top + 22 * UiScale, 102 * UiScale, 42 * UiScale);
     internal RectangleF DiscoveryBox=>new(LockBox.Left-148*UiScale,LockBox.Top,136*UiScale,LockBox.Height);
     internal RectangleF AllToysBox => new(RightBox.Left + 28 * UiScale, RightBox.Top + 62 * UiScale, 236 * UiScale, 28 * UiScale);
+    internal RectangleF ToyGearBox(int index) { var row=ToyBox(index); return !Document.AllToysToAllHoles || DiscoveryMode?RectangleF.Empty:new(RightBox.Left+12*UiScale,row.Top+row.Height/2-14*UiScale,28*UiScale,28*UiScale); }
+    internal RectangleF StatusBox=>new(RightBox.Right-264*UiScale,RightBox.Bottom-72*UiScale,230*UiScale,45*UiScale);
+    internal RectangleF ManualHintBox=>new(SetupBox.Right+12*UiScale,StatusBox.Top,Math.Max(1,StatusBox.Left-SetupBox.Right-24*UiScale),StatusBox.Height);
     private RectangleF ClearBox => new(LeftBox.Left + 16 * UiScale, LeftBox.Top + 72 * UiScale, (LeftBox.Width - 48 * UiScale) / 2, 44 * UiScale);
     internal RectangleF StopBox => new(ClearBox.Right + 16 * UiScale, ClearBox.Top, ClearBox.Width, ClearBox.Height);
     private RectangleF PrevBox => new(LeftBox.Left + 16 * UiScale, LeftBox.Bottom - 55 * UiScale, 52 * UiScale, 36 * UiScale);
@@ -76,9 +84,17 @@ internal sealed class SpsBoard : Control
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.StandardDoubleClick, true);
         BackColor = Background; Dock = DockStyle.Fill; TabStop = true;
         AccessibleName = "SPS body map"; AccessibleDescription = "Drag toy functions to holes. Hold and drag holes to move them. Double-click a hole or click a connection line or its gear for options.";
+        Controls.Add(AutomaticPanel); AutomaticPanel.Visible=false;
+        AutomaticPanel.SourcesChanged+=sources=>AutomaticSourcesRequested?.Invoke(sources);
     }
     protected override void Dispose(bool disposing) { if(disposing) connectionHelp.Dispose(); base.Dispose(disposing); }
-    public void SetDiscoveryMode(bool enabled) { CancelDrag(); ClearHover(); DiscoveryMode=enabled; Invalidate(); }
+    public void SetDiscoveryMode(bool enabled) { CancelDrag(); ClearHover(); DiscoveryMode=enabled; RefreshAutomaticView(); Invalidate(); }
+    internal void RefreshAutomaticView()
+    {
+        AutomaticPanel.Visible=Document.AllToysToAllHoles && !DiscoveryMode;
+        AutomaticPanel.Bounds=Rectangle.Round(new(BodyBox.X+18*UiScale,BodyBox.Y,Math.Max(1,BodyBox.Width-18*UiScale),BodyBox.Height));
+        if(AutomaticPanel.Visible) AutomaticPanel.Synchronize(Document,h=>HoleEnabled?.Invoke(h),h=>HoleActive?.Invoke(h)==true);
+    }
     private static GraphicsPath Rounded(RectangleF r, float radius)
     {
         var p = new GraphicsPath(); var d = Math.Min(radius * 2, Math.Min(r.Width, r.Height));
@@ -114,8 +130,11 @@ internal sealed class SpsBoard : Control
     private void DrawWireGear(Graphics g,SpsWire wire)
     {
         var box=WireGearBox(wire); if(box.IsEmpty) return;
+        DrawGear(g,box,Rows.FirstOrDefault(r=>r.Target==wire.Target)?.Color??Muted,HoveredWire==wire.Id,wire.Enabled);
+    }
+    private void DrawGear(Graphics g,RectangleF box,Color color,bool hover,bool enabled=true)
+    {
         var center=new PointF(box.X+box.Width/2,box.Y+box.Height/2);
-        var hover=HoveredWire==wire.Id; var color=Rows.FirstOrDefault(r=>r.Target==wire.Target)?.Color ?? Muted;
         using var background=new SolidBrush(hover ? Input : Surface); g.FillEllipse(background,box);
         using var ring=new Pen(Color.FromArgb(hover ? 230 : 140,color),(hover ? 1.8f : 1.2f)*UiScale); g.DrawEllipse(ring,box);
         var teeth=new PointF[32];
@@ -124,10 +143,10 @@ internal sealed class SpsBoard : Control
             var angle=i*MathF.PI/16; var radius=(i%4 is 1 or 2 ? 9.5f : 7.3f)*UiScale;
             teeth[i]=new(center.X+MathF.Cos(angle)*radius,center.Y+MathF.Sin(angle)*radius);
         }
-        using var gear=new SolidBrush(wire.Enabled ? White : Muted); g.FillPolygon(gear,teeth);
+        using var gear=new SolidBrush(enabled ? White : Muted); g.FillPolygon(gear,teeth);
         g.FillEllipse(background,center.X-3.4f*UiScale,center.Y-3.4f*UiScale,6.8f*UiScale,6.8f*UiScale);
     }
-    private SpsHole? HitHole(Point point) => DiscoveryMode ? null : Document.Holes.LastOrDefault(h => Distance(point, HolePoint(h.Id)) <= 19 * UiScale);
+    private SpsHole? HitHole(Point point) => DiscoveryMode || Document.AllToysToAllHoles ? null : Document.Holes.LastOrDefault(h => Distance(point, HolePoint(h.Id)) <= 19 * UiScale);
     private static float Distance(PointF a, PointF b) => MathF.Sqrt((a.X-b.X)*(a.X-b.X)+(a.Y-b.Y)*(a.Y-b.Y));
     private string? HitWire(Point point)
     {
@@ -154,13 +173,13 @@ internal sealed class SpsBoard : Control
         PaintText(g,"TOY FUNCTIONS",new(LeftBox.Left+21*UiScale,LeftBox.Top+18*UiScale,LeftBox.Width-42*UiScale,22*UiScale),17,null,true);
         PaintText(g,DiscoveryMode ? "Live toy status" : Document.AllToysToAllHoles ? "All functions follow permitted contacts" : "Drag a function to a hole",new(LeftBox.Left+21*UiScale,LeftBox.Top+44*UiScale,LeftBox.Width-42*UiScale,18*UiScale),12,Muted);
         Button(g,ClearBox,"Clear links",Document.AllToysToAllHoles ? LeftSurface : Input,!Document.AllToysToAllHoles); Button(g,StopBox,"STOP ALL",Color.FromArgb(110,65,68));
-        PaintText(g,DiscoveryMode ? "SPS discovery" : "SPS body map",new(RightBox.Left+28*UiScale,RightBox.Top+23*UiScale,Math.Max(1,DiscoveryBox.Left-RightBox.Left-42*UiScale),30*UiScale),22,null,true);
+        PaintText(g,DiscoveryMode ? "SPS discovery" : Document.AllToysToAllHoles?"Automatic SPS":"SPS body map",new(RightBox.Left+28*UiScale,RightBox.Top+23*UiScale,Math.Max(1,DiscoveryBox.Left-RightBox.Left-42*UiScale),30*UiScale),22,null,true);
         Button(g,DiscoveryBox,DiscoveryMode ? "Discovery ON" : "Discovery",DiscoveryMode ? Color.FromArgb(44,85,80) : Input);
         Button(g,AllToysBox,"All toys → all holes: " + (Document.AllToysToAllHoles ? "ON" : "OFF"),Document.AllToysToAllHoles ? Color.FromArgb(44,85,80) : Input);
-        PaintText(g,DiscoveryMode ? "Find plugs and sockets" : Document.AllToysToAllHoles ? "Manual links paused" : Document.HolesLocked ? "Holes locked" : "Drag holes · double-click for options",
+        PaintText(g,DiscoveryMode ? "Find plugs and sockets" : Document.AllToysToAllHoles ? "Hole options" : Document.HolesLocked ? "Holes locked" : "Drag holes · double-click for options",
             new(AllToysBox.Right+16*UiScale,AllToysBox.Top,RightBox.Right-AllToysBox.Right-30*UiScale,AllToysBox.Height),12,Muted);
-        Button(g,LockBox,Document.HolesLocked ? "Locked" : "Lock holes",Document.HolesLocked ? Color.FromArgb(44,85,80) : Input,!DiscoveryMode);
-        if(!DiscoveryMode) DrawHuman(g);
+        if(!Document.AllToysToAllHoles) Button(g,LockBox,Document.HolesLocked ? "Locked" : "Lock holes",Document.HolesLocked ? Color.FromArgb(44,85,80) : Input,!DiscoveryMode);
+        if(!DiscoveryMode && !Document.AllToysToAllHoles) DrawHuman(g);
         var visible=Rows.Skip(Page*6).Take(6).ToArray();
         for(var i=0;i<visible.Length;i++)
         {
@@ -177,7 +196,7 @@ internal sealed class SpsBoard : Control
             var p=Port(i); using var portFill=new SolidBrush(row.Connected && !Document.AllToysToAllHoles ? row.Color : Input); g.FillEllipse(portFill,p.X-7*UiScale,p.Y-7*UiScale,14*UiScale,14*UiScale);
             using var ring=new Pen(Color.FromArgb(110,row.Color),1.5f*UiScale); g.DrawEllipse(ring,p.X-9*UiScale,p.Y-9*UiScale,18*UiScale,18*UiScale);
         }
-        if(!DiscoveryMode) foreach(var wire in Document.Wires)
+        if(!DiscoveryMode && !Document.AllToysToAllHoles) foreach(var wire in Document.Wires)
         {
             using var path=WirePath(wire); if(path.PointCount==0) continue;
             var row=Rows.FirstOrDefault(r=>r.Target==wire.Target); var color=Document.AllToysToAllHoles ? Color.FromArgb(125,128,134) : row?.Color ?? Muted;
@@ -189,15 +208,16 @@ internal sealed class SpsBoard : Control
             var index=Array.FindIndex(visible,r=>r.Target==connecting); if(index>=0)
             { var a=Port(index); using var pen=new Pen(visible[index].Color,2.5f*UiScale) { DashStyle=DashStyle.Dash }; g.DrawBezier(pen,a,new(a.X+100*UiScale,a.Y),new(pointer.X-60*UiScale,pointer.Y),pointer); }
         }
-        if(!DiscoveryMode) foreach(var hole in Document.Holes)
+        if(!DiscoveryMode && !Document.AllToysToAllHoles) foreach(var hole in Document.Holes)
         {
             var p=HolePoint(hole.Id); var level=HoleLevel?.Invoke(hole) ?? 0; var hover=connecting is not null && HitHole(pointer)?.Id==hole.Id;
-            var active=level>0 || HoleActive?.Invoke(hole)==true;
+            var active=HoleEnabled?.Invoke(hole)??(level>0 || HoleActive?.Invoke(hole)==true);
             using var fill=new SolidBrush(Surface); g.FillEllipse(fill,p.X-13*UiScale,p.Y-13*UiScale,26*UiScale,26*UiScale);
             using var ring=new Pen(hover || active ? Accent : Color.FromArgb(210,217,226),(hover?3:2)*UiScale); g.DrawEllipse(ring,p.X-13*UiScale,p.Y-13*UiScale,26*UiScale,26*UiScale);
             using var core=new SolidBrush(active ? Accent : Color.FromArgb(90,98,110)); g.FillEllipse(core,p.X-4*UiScale,p.Y-4*UiScale,8*UiScale,8*UiScale);
         }
         foreach(var wire in Document.Wires) DrawWireGear(g,wire);
+        if(Document.AllToysToAllHoles && !DiscoveryMode) for(var i=0;i<visible.Length;i++) DrawGear(g,ToyGearBox(i),visible[i].Color,ToyGearBox(i).Contains(pointer));
         // Paint just the hovered label last, so other circles and wires cannot
         // obscure it. Names stay hidden during ordinary viewing.
         if(Document.Holes.FirstOrDefault(h=>h.Id==HoveredHole) is { } named)
@@ -214,7 +234,13 @@ internal sealed class SpsBoard : Control
         Button(g,PrevBox,"‹"); Button(g,NextBox,"›"); PaintText(g,$"{Page+1} / {PageCount}",new(PrevBox.Right,PrevBox.Y,NextBox.Left-PrevBox.Right,PrevBox.Height),12,Muted,false,true);
         PaintText(g,$"{Rows.Select(r=>r.Target.DeviceKey).Distinct().Count()} toys · {Rows.Count} functions",new(LeftBox.Left+24*UiScale,LeftBox.Bottom-18*UiScale,LeftBox.Width-40*UiScale,16*UiScale),10,Muted);
         PaintText(g,"Input setup…",SetupBox,12,Muted);
-        var badge=new RectangleF(RightBox.Right-264*UiScale,RightBox.Bottom-72*UiScale,230*UiScale,45*UiScale); Fill(g,badge,Input,10);
+        var badge=StatusBox; Fill(g,badge,Input,10);
+        if(!DiscoveryMode && !Document.AllToysToAllHoles)
+        {
+            var hint=ManualHintBox;
+            PaintText(g,"Hold + drag to move",new(hint.X,hint.Y+3*UiScale,hint.Width,18*UiScale),11,Muted);
+            PaintText(g,"Double-click for options",new(hint.X,hint.Y+22*UiScale,hint.Width,18*UiScale),11,Muted);
+        }
         PaintText(g,Status,new(badge.X+12*UiScale,badge.Y+3*UiScale,badge.Width-24*UiScale,21*UiScale),13,Status=="SPS CONNECTED" ? Accent : Muted,true);
         PaintText(g,StatusDetail,new(badge.X+12*UiScale,badge.Y+23*UiScale,badge.Width-24*UiScale,17*UiScale),10,Muted);
     }
@@ -265,7 +291,7 @@ internal sealed class SpsBoard : Control
     {
         base.OnMouseDown(e); if(e.Button!=MouseButtons.Left) return; Focus(); start=pointer=e.Location; dragged=false; pickedWire=null;
         if(DiscoveryBox.Contains(e.Location)) { DiscoveryRequested?.Invoke(); return; }
-        if(LockBox.Contains(e.Location)) { if(!DiscoveryMode) LockRequested?.Invoke(); return; }
+        if(LockBox.Contains(e.Location) && !Document.AllToysToAllHoles) { if(!DiscoveryMode) LockRequested?.Invoke(); return; }
         if(AllToysBox.Contains(e.Location)) { CancelDrag(); AllToysRequested?.Invoke(); return; }
         if(StopBox.Contains(e.Location)) { StopRequested?.Invoke(); return; }
         if(ClearBox.Contains(e.Location)) { if(!Document.AllToysToAllHoles) ClearRequested?.Invoke(); return; }
@@ -278,6 +304,11 @@ internal sealed class SpsBoard : Control
             var visible=Discoveries.Skip(DiscoveryPage*DiscoveryPageSize).Take(DiscoveryPageSize).ToArray();
             for(var i=0;i<visible.Length;i++) if(DiscoveryAddBox(i).Contains(e.Location) && CanAdd(visible[i]))
             { DiscoveryAddRequested?.Invoke(visible[i].Id); return; }
+            return;
+        }
+        if(Document.AllToysToAllHoles)
+        {
+            for(var i=0;i<Rows.Skip(Page*6).Take(6).Count();i++) if(ToyGearBox(i).Contains(e.Location)) { ToyOptionsRequested?.Invoke(Rows[Page*6+i].Target); return; }
             return;
         }
         if(HitHole(e.Location) is { } hole)
@@ -298,7 +329,9 @@ internal sealed class SpsBoard : Control
         if(wire!=HoveredWire) { HoveredWire=wire; connectionHelp.SetToolTip(this,wire is null ? null : "Click the line or gear for connection options"); Invalidate(); }
         var add=DiscoveryMode && Enumerable.Range(0,Discoveries.Skip(DiscoveryPage*DiscoveryPageSize).Take(DiscoveryPageSize).Count())
             .Any(i=>DiscoveryAddBox(i).Contains(e.Location) && CanAdd(Discoveries[DiscoveryPage*DiscoveryPageSize+i]));
-        Cursor=Dragging || hovered is not null || wire is not null || add || DiscoveryBox.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
+        var gear=Document.AllToysToAllHoles && !DiscoveryMode && Enumerable.Range(0,Rows.Skip(Page*6).Take(6).Count()).Any(i=>ToyGearBox(i).Contains(e.Location));
+        if(gear) connectionHelp.SetToolTip(this,"Click for this toy function's SPS options");
+        Cursor=Dragging || hovered is not null || wire is not null || add || gear || DiscoveryBox.Contains(e.Location) ? Cursors.Hand : Cursors.Default;
     }
     protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); ClearHover(); Invalidate(); }
     private void ClearHover() { HoveredHole=null; HoveredWire=null; connectionHelp.SetToolTip(this,null); }
@@ -320,5 +353,5 @@ internal sealed class SpsBoard : Control
         { if(e is HandledMouseEventArgs handled) handled.Handled=true; discoveryPage=Math.Clamp(DiscoveryPage-Math.Sign(e.Delta),0,DiscoveryPageCount-1); Invalidate(); return; }
         base.OnMouseWheel(e);
     }
-    protected override void OnResize(EventArgs e) { base.OnResize(e); ClearHover(); if(Dragging) CancelDrag(); Page=Math.Min(Page,PageCount-1); }
+    protected override void OnResize(EventArgs e) { base.OnResize(e); ClearHover(); if(Dragging) CancelDrag(); Page=Math.Min(Page,PageCount-1); RefreshAutomaticView(); }
 }

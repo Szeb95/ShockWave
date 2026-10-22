@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.7.6',
+    [string]$Version = '0.7.7',
     [string]$OutputDirectory = '',
     [string[]]$PublishArguments = @()
 )
@@ -91,7 +91,7 @@ Read REMOTE.md, TOY-CONTROL.md, SPS.md and PISHOCK.md for setup and current limi
 
 $releaseFiles = @(Get-ChildItem -LiteralPath $releasePayload -File -Recurse | Sort-Object FullName)
 foreach ($releaseFile in $releaseFiles) {
-    if ($releaseFile.Name -match '^(api-token\.bin|pishock-api-key\.bin|bridge-config\.json|config\.json|activity\.log|.*\.pdb|.*\.test\.mjs|LovenseBLE_Lib\.dll)$') { throw "Private/debug/vendor file in release: $($releaseFile.Name)" }
+    if ($releaseFile.Name -match '^(api-token\.bin|pishock-api-key\.bin|remote-friends\.bin|bridge-config\.json|config\.json|activity\.log|.*\.pdb|.*\.test\.mjs|LovenseBLE_Lib\.dll)$') { throw "Private/debug/vendor file in release: $($releaseFile.Name)" }
 }
 $releaseManifestFiles = @($releaseFiles | ForEach-Object {
     [ordered]@{ path = [IO.Path]::GetRelativePath($releasePayload, $_.FullName).Replace('\','/'); sha256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant() }

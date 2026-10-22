@@ -51,6 +51,8 @@ work/intiface-engine-*.zip
 !.env.example
 **/api-token.bin
 **/pishock-api-key.bin
+**/remote-friends.bin
+**/remote-friends.bin.*.tmp
 **/bridge-config.json
 **/sps-mappings.json
 **/remembered-toys.json

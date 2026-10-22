@@ -105,7 +105,7 @@ internal sealed class ToyControlSession : IDisposable
         {
             var key = (row.Toy.Id, row.Function.Id);
             if (!bindings.ContainsKey(key) && State(key) is { } state && Math.Abs(row.Function.Level - state.RequestedPercent / 100f) > .00001)
-                ResetFromOwner(key);
+                ResetFromOwner(key,preserveSelection:true);
         }
         Model.RefreshIdleDisplay();
     }
@@ -115,7 +115,7 @@ internal sealed class ToyControlSession : IDisposable
         try { return ControllerFor(key.Toy)?.State(key.Toy, key.Function); }
         catch (InvalidOperationException) { return null; }
     }
-    private void ResetFromOwner((string Toy, string Function) key)
+    private void ResetFromOwner((string Toy, string Function) key,bool preserveSelection=false)
     {
         var row = Find(key); if (row is null) return;
         var remote = key.Toy.StartsWith("remote/", StringComparison.Ordinal);
@@ -136,7 +136,7 @@ internal sealed class ToyControlSession : IDisposable
             }
             Notice = "Remote toy stopped · draw again or press Play";
         }
-        else if (Find(key) is { } updated) updated.Function.Selected = false;
+        else if (!preserveSelection && Find(key) is { } updated) updated.Function.Selected = false;
     }
     private bool Ready(bool vrc)
     {

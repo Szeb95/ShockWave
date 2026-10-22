@@ -24,6 +24,7 @@ internal sealed class SpsPage : UserControl
     private SpsTarget[] routingTargets = [];
     private readonly Dictionary<string,(object Value,double At)> unrecognized = new(StringComparer.Ordinal);
     private readonly SpsDiscovery discovery = new();
+    private readonly SpsActivation activation=new();
     internal IReadOnlyList<SpsDiscoveryCandidate> DiscoveryCandidates=>discovery.Candidates(ToyOscRouter.Clock);
     internal IReadOnlyCollection<string> UnrecognizedInputs => unrecognized.Keys;
     public SpsSession Session { get; }
@@ -37,10 +38,14 @@ internal sealed class SpsPage : UserControl
     public SpsPage(LocalToysPage toys,Func<bool> listening,SpsStore? store=null,Func<int>? avatarPort=null)
     {
         this.toys=toys; this.listening=listening; this.avatarPort=avatarPort??(()=>9000); legacyStore=store??new SpsStore();
-        this.store=new(Path.ChangeExtension(legacyStore.PathName,".board.json")); document=this.store.Load(legacyStore.Load());
+        this.store=new(Path.ChangeExtension(legacyStore.PathName,".board.json")); document=this.store.Load(legacyStore.Load(),File.Exists(legacyStore.PathName));
+        if(document.AllToysToAllHoles && document.AutomaticSources is null) document=document with { AutomaticSources=SpsBoardModel.EffectiveAutomaticSources(document) };
         Session=new(()=>toys.Snapshot,()=>toys.Controller); Session.Configure(SpsBoardModel.Compile(document),ToyOscRouter.Clock);
         Dock=DockStyle.Fill; BackColor=Color.FromArgb(30,31,34); Controls.Add(board); Controls.Add(message);
         board.Document=document; board.HoleLevel=HoleLevel; board.HoleState=HoleState; board.HoleActive=HoleActive;
+        board.HoleEnabled=h=>activation.Get(h.Stem,ToyOscRouter.Clock);
+        board.AutomaticSourcesRequested+=SetAutomaticSources;
+        board.ToyOptionsRequested+=AutomaticToyOptions;
         board.HoleMoved+=(id,x,y)=> { var next=document.Copy(); var index=next.Holes.FindIndex(h=>h.Id==id); next.Holes[index]=next.Holes[index] with { X=x,Y=y }; Commit(next,false); };
         board.LockRequested+=()=>Commit(document with { HolesLocked=!document.HolesLocked },false);
         board.AllToysRequested+=()=>Commit(document with { AllToysToAllHoles=!document.AllToysToAllHoles });
@@ -62,13 +67,13 @@ internal sealed class SpsPage : UserControl
         if(!SignalsEnabled) return;
         if(now>=inputResetAt && ToyOscRouter.Clock-now<=.25) discovery.Observe(input,now);
         if(!Session.Apply(input,now)) { ObserveUnrecognized(input,now); return; }
-        if(input.Address=="/avatar/change") { inputResetAt=now; queryAvatar=(string)input.Arguments[0]; query?.Reset(); unrecognized.Clear(); discovery.Reset(); }
+        if(input.Address=="/avatar/change") { inputResetAt=now; queryAvatar=(string)input.Arguments[0]; query?.Reset(); unrecognized.Clear(); discovery.Reset(); activation.Reset(); }
         var signal=Session.Signals.FirstOrDefault(s=>s.Address==input.Address);
         if(signal is null || document.Holes.All(h=>h.DiscoveryOnly || h.Id!=SpsBoardModel.Key(SpsBoardModel.Stem(signal.Address)))
             || !SpsBoardModel.Discover(document,signal)) return;
         metadataDirty=true; board.Document=document; ConfigureRouting(now);
     }
-    public void ResetInput() { if(closed) return; inputResetAt=ToyOscRouter.Clock; queryAvatar=null; query?.Reset(); unrecognized.Clear(); discovery.Reset(); Session.Reset(inputResetAt,"OSC link reset"); }
+    public void ResetInput() { if(closed) return; inputResetAt=ToyOscRouter.Clock; queryAvatar=null; query?.Reset(); unrecognized.Clear(); discovery.Reset(); activation.Reset(); Session.Reset(inputResetAt,"OSC link reset"); }
     private void ObserveUnrecognized(OscMessage input,double now)
     {
         if(!double.IsFinite(now) || !SpsSignals.SafeAddress(input.Address) || SpsSignals.Describe(input.Address) is not null || input.Arguments.Length!=1) return;
@@ -89,7 +94,8 @@ internal sealed class SpsPage : UserControl
     {
         if(closed || frame.RequestedAt<=inputResetAt || ToyOscRouter.Clock-frame.RequestedAt>.25) return;
         if(queryAvatar!=frame.Avatar)
-        { queryAvatar=frame.Avatar; inputResetAt=frame.RequestedAt; unrecognized.Clear(); discovery.Reset(); Session.Reset(inputResetAt,"Avatar contacts refreshed"); }
+        { queryAvatar=frame.Avatar; inputResetAt=frame.RequestedAt; unrecognized.Clear(); discovery.Reset(); activation.Reset(); Session.Reset(inputResetAt,"Avatar contacts refreshed"); }
+        activation.Apply(frame.SocketEnabled,frame.RequestedAt);
         // Query inventory is readable even when another OSC app owns the UDP
         // port. Keep those observations out of the routing session until the
         // shared listener is healthy; never promote cached metadata on recovery.
@@ -114,13 +120,17 @@ internal sealed class SpsPage : UserControl
         var rules=Session.Rules.Where(r=>SpsBoardModel.Stem(r.Address)==hole.Stem).ToArray();
         if(rules.Length>0) return rules.Max(r=>Session.RoutedLevel(r.Id));
         return Session.Signals.Where(s=>SpsBoardModel.Stem(s.Address)==hole.Stem && ToyOscRouter.Clock-s.ReceivedAt<=2
-            && hole.Sources.HasFlag(SpsBoardModel.Source(s)) && !s.Address.EndsWith("NewTip",StringComparison.Ordinal) && !s.Address.EndsWith("NewRoot",StringComparison.Ordinal)).Select(s=>s.Value).DefaultIfEmpty(0).Max();
+            && HoleSources(hole).HasFlag(SpsBoardModel.Source(s)) && !s.Address.EndsWith("NewTip",StringComparison.Ordinal) && !s.Address.EndsWith("NewRoot",StringComparison.Ordinal)).Select(s=>s.Value).DefaultIfEmpty(0).Max();
     }
+    private SpsSources HoleSources(SpsHole hole)=>document.AllToysToAllHoles?SpsBoardModel.EffectiveAutomaticSources(document):hole.Sources;
     private bool HoleActive(SpsHole hole)=>Session.Signals.Any(s=>SpsBoardModel.Stem(s.Address)==hole.Stem && ToyOscRouter.Clock-s.ReceivedAt<=2
-        && s.Value>0 && hole.Sources.HasFlag(SpsBoardModel.Source(s)));
+        && s.Value>0 && HoleSources(hole).HasFlag(SpsBoardModel.Source(s)));
     private string HoleState(SpsHole hole)
     {
         if(hole.DiscoveryOnly) return "Unrecognized SPS format · input setup needed";
+        var enabled=activation.Get(hole.Stem,ToyOscRouter.Clock);
+        if(enabled==false) return "Off";
+        if(enabled==true && !HoleActive(hole)) return "On · waiting for contact";
         var rules=Session.Rules.Where(r=>SpsBoardModel.Stem(r.Address)==hole.Stem && r.Enabled).ToArray();
         if(rules.Length==0) return HoleActive(hole)?"Contact received · connect a toy":"Waiting for contact";
         var states=rules.Select(r=>Session.RuleState(r,ToyOscRouter.Clock)).ToArray();
@@ -164,6 +174,7 @@ internal sealed class SpsPage : UserControl
     {
         try
         {
+            if(next.AllToysToAllHoles && next.AutomaticSources is null) next=next with { AutomaticSources=SpsBoardModel.EffectiveAutomaticSources(next) };
             store.Save(next); document=next; metadataDirty=false;
             var ready=!routing || ConfigureRouting(ToyOscRouter.Clock);
             board.Document=document; PaintBoard(); if(ready) SetMessage(""); return true;
@@ -200,7 +211,8 @@ internal sealed class SpsPage : UserControl
                 if(next.Wires[wireIndex].HoleId==id) next.Wires[wireIndex]=next.Wires[wireIndex] with { Enabled=false };
         }
         else next.Holes.Add(hole);
-        if(Commit(next)) SetMessage(supported ? "Added to the body map. Turn Discovery off to place and connect it." : "Added to the body map. This format needs input setup before it can control a toy.");
+        if(Commit(next)) SetMessage(!supported ? "Added to the body map. This format needs input setup before it can control a toy." :
+            document.AllToysToAllHoles?"Added. The shared hole options apply when fresh signals arrive.":"Added to the body map. Turn Discovery off to place and connect it.");
     }
     private void Present(Form options)
     { if(OptionsPresenter is not null) OptionsPresenter(options); else options.ShowDialog(FindForm()); }
@@ -221,6 +233,20 @@ internal sealed class SpsPage : UserControl
         if(document.Holes.FirstOrDefault(h=>h.Id==id) is not { } hole) return;
         using var options=new SpsHoleOptions(hole); Present(options); if(options.DialogResult!=DialogResult.OK) return;
         var next=document.Copy(); var index=next.Holes.FindIndex(h=>h.Id==id); next.Holes[index]=next.Holes[index] with { Sources=options.Value.Sources }; Commit(next);
+    }
+    private void SetAutomaticSources(SpsSources sources)
+    {
+        if(closed || !document.AllToysToAllHoles) return;
+        Commit(document with { AutomaticSources=sources });
+    }
+    private void AutomaticToyOptions(SpsTarget target)
+    {
+        if(closed || !document.AllToysToAllHoles) return;
+        var setting=document.AutomaticToyOptions.FirstOrDefault(o=>o.Target==target)??new SpsWire { Id=SpsBoardModel.Key("auto/"+target.DeviceKey+"/"+target.ChannelId),Target=target };
+        var row=board.Rows.FirstOrDefault(r=>r.Target==target);
+        using var options=new SpsWireOptions(setting,null,row?.Function??"Toy function",automatic:true); Present(options);
+        if(options.DialogResult!=DialogResult.OK) return;
+        var next=document.Copy(); next.AutomaticToyOptions.RemoveAll(o=>o.Target==target); next.AutomaticToyOptions.Add(options.Value); Commit(next);
     }
     private void Setup()
     {
@@ -272,6 +298,6 @@ internal sealed class SpsPage : UserControl
         catch(Exception e) when(e is IOException or UnauthorizedAccessException or InvalidDataException) { SetMessage("Export failed: "+e.Message); }
     }
     private void SetMessage(string value) { message.Text=value; message.Height=value.Length==0?0:26; }
-    public void Shutdown() { if(closed) return; closed=true; timer.Stop(); query?.Dispose(); discovery.Reset(); board.Discoveries=[]; Session.Dispose(); }
+    public void Shutdown() { if(closed) return; closed=true; timer.Stop(); query?.Dispose(); discovery.Reset(); activation.Reset(); board.Discoveries=[]; Session.Dispose(); }
     protected override void Dispose(bool disposing) { if(disposing) { Shutdown(); timer.Dispose(); } base.Dispose(disposing); }
 }

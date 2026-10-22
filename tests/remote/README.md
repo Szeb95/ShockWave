@@ -1,5 +1,17 @@
 # Remote connection checks
 
+The 0.7.7 saved-friends checks cover isolated Windows encryption/reload, corrupt/failed storage preservation, key replacement refusal, rename/Forget and offscreen friend selection with Connect initially off. Node `remote-friends.test.mjs` covers both-side persistence acknowledgments, distinct private nonce derivation, failure, simultaneous saves, duplicate/malformed/expired requests and deterministic saved callers. No real user store is used.
+
+To compile and check without creating an app EXE/package:
+
+```powershell
+dotnet build tests/remote/Remote.Checks.csproj -c Release -p:UseAppHost=false -p:PublishSingleFile=false -p:IncludeLegacyLovense=false
+dotnet tests/remote/bin/Release/net8.0-windows/Remote.Checks.dll
+dotnet tests/remote/bin/Release/net8.0-windows/Remote.Checks.dll --friends-internet
+```
+
+`--friends-internet` separately uses two isolated native sessions and source workers against the public setup helper: one Save on both apps, complete worker restart, code-free reconnection, one-side-off waiting, zero replay, fresh simulated control, Forget, rejection of the retained old key/original code, and fresh-code re-pairing. All identities/keys are generated only for these fixtures and kept out of logs/screenshots. Requires installed Node and restored bridge dependencies; both clients are on one PC, with simulated devices. This establishes neither separate-household reachability nor physical output/Stop timing. Saved friends require 0.7.7 or later on both apps.
+
 The 0.7.6 suite also verifies expiry-reason logs, deduplication, numeric-only health summaries, private-field omission, untrusted-reason sanitizing, avatar-link diagnostics, a two-motor stopped graph returning to zero, and a small offscreen Log page with Copy log / Copy remote log / Clear. Clear resets visible/copied history; previews do not show the normal app form or start its devices.
 
 Add `--log-stress` separately to run the opt-in performance reproduction: 500 long log entries, an isolated offscreen Log page, opening followed by repeated resizing/appending, and a real independently expiring 330 ms simulated receiver lease renewed by the UI timer. The old AllCells view expires that lease; the virtual fixed-height view stays active. Timing is measured locally rather than imposing a hardware-throughput requirement on shared CI. `work/remote-checks/log-performance.json` records show time, maximum timer gap and expiry; no normal app form, device, network peer, log attachment or real settings are used. Default checks cover full virtual values, bounded rotation, embedded spaces, copy and Clear.

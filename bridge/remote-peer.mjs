@@ -142,7 +142,7 @@ export class DirectPeer {
         else if (age + this.uncertainty >= STATE_LIFETIME_MS) stats.expired++;
       }
       if (age < -this.uncertainty || age + this.uncertainty >= messageLifetimeMs(msg.kind)) return;
-      if (!['inventory', 'state', 'shock', 'result', 'stop'].includes(msg.kind) || (channel === 'sw-state' && msg.kind !== 'state')) return;
+      if (!['inventory', 'state', 'shock', 'result', 'stop', 'friend'].includes(msg.kind) || (channel === 'sw-state' && msg.kind !== 'state')) return;
       this.lastSequence.set(msg.kind, msg.sequence); this.lastRx = performance.now();
       if (msg.kind === 'state') {
         const stats = this.metrics(), now = performance.now(); stats.received++;

@@ -30,9 +30,20 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
     public void Configure(List<SpsRule> rules, double now)
     {
         SpsStore.Validate(rules, 2048, 256);
-        var changed = Rules.Where(old => !rules.Any(next => Same(old, next))).Concat(rules.Where(next => !Rules.Any(old => Same(old, next)))).ToArray();
-        foreach (var target in changed.SelectMany(r => r.Targets).Distinct())
-        { End(target); if (!blocked.ContainsKey(target)) observedOwnership.Remove(target); }
+        var previous=Rules.ToDictionary(r=>r.Id); var replacement=rules.ToDictionary(r=>r.Id);
+        var changed = Rules.Where(old => !replacement.TryGetValue(old.Id,out var next) || !Same(old,next))
+            .Concat(rules.Where(next => !previous.TryGetValue(next.Id,out var old) || !Same(old,next))).ToArray();
+        var affected=changed.SelectMany(r=>r.Targets).ToHashSet();
+        foreach(var old in Rules)
+        {
+            if(!replacement.TryGetValue(old.Id,out var next) || !Same(old,next)) continue;
+            affected.UnionWith(old.Targets.Except(next.Targets)); affected.UnionWith(next.Targets.Except(old.Targets));
+        }
+        foreach (var target in affected)
+        {
+            End(target); unavailableSince[target]=now;
+            if (!blocked.ContainsKey(target)) observedOwnership.Remove(target);
+        }
         foreach (var rule in changed) { levels.Remove(rule.Id); configuredAt[rule.Id] = now; }
         Rules = rules.Select(r => r with { Targets = r.Targets.ToList() }).ToArray();
         foreach (var id in configuredAt.Keys.Where(id => !Rules.Any(r => r.Id == id)).ToArray()) configuredAt.Remove(id);
@@ -43,7 +54,7 @@ internal sealed class SpsSession(Func<ToyAdapterSnapshot?> inventory, Func<Local
     }
     private static bool Same(SpsRule a, SpsRule b) => a.Id == b.Id && a.Name == b.Name && a.Address == b.Address && a.RootAddress == b.RootAddress && a.Enabled == b.Enabled
         && a.Response == b.Response && a.InputMin == b.InputMin && a.InputMax == b.InputMax && a.Gain == b.Gain && a.DeadZone == b.DeadZone
-        && a.SmoothingMs == b.SmoothingMs && a.TimeoutMs == b.TimeoutMs && a.Targets.SequenceEqual(b.Targets);
+        && a.SmoothingMs == b.SmoothingMs && a.TimeoutMs == b.TimeoutMs;
     private double AcceptAfter(SpsRule rule) => Math.Max(startAt, configuredAt.GetValueOrDefault(rule.Id, double.NegativeInfinity));
     public void Stop()
     {

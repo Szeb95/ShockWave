@@ -29,10 +29,16 @@ internal sealed record SpsWire
 internal sealed record SpsBoardDocument(int Version, bool HolesLocked, List<SpsHole> Holes, List<SpsWire> Wires)
 {
     public bool AllToysToAllHoles { get; init; }
-    public SpsBoardDocument Copy() => this with { Holes = Holes.Select(h => h with { Inputs = h.Inputs.ToList() }).ToList(), Wires = Wires.Select(w => w with { ExactInputs = w.ExactInputs.ToList() }).ToList() };
+    public SpsSources? AutomaticSources { get; init; }
+    public List<SpsWire> AutomaticToyOptions { get; init; } = [];
+    public SpsBoardDocument Copy() => this with { Holes = Holes.Select(h => h with { Inputs = h.Inputs.ToList() }).ToList(), Wires = Wires.Select(w => w with { ExactInputs = w.ExactInputs.ToList() }).ToList(), AutomaticToyOptions=AutomaticToyOptions.Select(w=>w with { ExactInputs=[] }).ToList() };
 }
 internal static class SpsBoardModel
 {
+    // Older layouts inherit one shared set without overwriting their manual choices.
+    public static SpsSources EffectiveAutomaticSources(SpsBoardDocument board) => board.AutomaticSources ??
+        (board.Holes.Count==0 ? SpsSources.OtherSockets|SpsSources.OtherBody|SpsSources.OtherPlugs :
+            board.Holes.Aggregate((SpsSources)0,(sources,hole)=>sources|hole.Sources));
     public static string Key(string text) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..32];
     public static string Stem(string address) => SpsSignals.Describe(address) is null ? address : address[..address.LastIndexOf('/')];
     public static SpsHole Hole(string address, int index = 0)
@@ -87,9 +93,16 @@ internal static class SpsBoardModel
             if (targets.Count == 0) return [];
             // Shared rules per contact keep automatic routing bounded. Saved
             // manual wires never become automatic wires.
-            var automatic = board with { AllToysToAllHoles = false, Wires = board.Holes.Select(h => new SpsWire
-                { Id = Key("all/" + h.Id), HoleId = h.Id, Target = targets[0] }).ToList() };
-            var compiled = Compile(automatic).Select(r => r with { Targets = targets.ToList() }).ToList();
+            var compiled=new List<SpsRule>();
+            var options=targets.Select(t=>board.AutomaticToyOptions.FirstOrDefault(o=>o.Target==t)??new SpsWire { Target=t });
+            foreach(var group in options.GroupBy(o=>(o.Enabled,o.Response,o.InputMin,o.InputMax,o.Gain,o.DeadZone,o.SmoothingMs,o.TimeoutMs)))
+            {
+                var setting=group.First(); var groupId=Key(JsonSerializer.Serialize(group.Key, new JsonSerializerOptions { IncludeFields=true }));
+                var automatic=board with { AllToysToAllHoles=false,
+                    Holes=board.Holes.Select(h=>h with { Sources=EffectiveAutomaticSources(board) }).ToList(),Wires=board.Holes.Select(h=>setting with
+                    { Id=Key("all/"+groupId+"/"+h.Id),HoleId=h.Id,ExactInputs=[] }).ToList() };
+                compiled.AddRange(Compile(automatic).Select(r=>r with { Targets=group.Select(o=>o.Target).ToList() }));
+            }
             SpsStore.Validate(compiled, 2048, 256); return compiled;
         }
         var rules = new List<SpsRule>();
@@ -138,9 +151,10 @@ internal sealed class SpsBoardStore(string file)
     public string PathName { get; } = file;
     public string? Warning { get; private set; }
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
-    public SpsBoardDocument Load(List<SpsRule> legacy)
+    public SpsBoardDocument Load(List<SpsRule> legacy,bool legacyFileExists=false)
     {
-        if (!File.Exists(PathName)) return SpsBoardModel.FromRules(legacy);
+        if (!File.Exists(PathName)) return legacy.Count==0 && !legacyFileExists
+            ? new(1,false,[],[]) { AllToysToAllHoles=true } : SpsBoardModel.FromRules(legacy);
         try { return Read(PathName); }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidDataException or JsonException)
         { Warning = "Saved SPS layout could not be read. It is preserved; existing exact mappings are still available."; return SpsBoardModel.FromRules(legacy); }
@@ -153,7 +167,7 @@ internal sealed class SpsBoardStore(string file)
     }
     public static void Validate(SpsBoardDocument board)
     {
-        if (board.Version != 1 || board.Holes is null || board.Wires is null || board.Holes.Count > 64 || board.Wires.Count > 1024
+        if (board.Version != 1 || board.Holes is null || board.Wires is null || (board.AutomaticSources is {} sources && ((int)sources & ~63)!=0) || board.AutomaticToyOptions is null || board.AutomaticToyOptions.Count>256 || board.Holes.Count > 64 || board.Wires.Count > 1024
             || board.Holes.Any(h => h is null) || board.Wires.Any(w => w is null)
             || board.Holes.Select(h => h.Id).Distinct().Count() != board.Holes.Count || board.Wires.Select(w => w.Id).Distinct().Count() != board.Wires.Count)
             throw new InvalidDataException("Invalid SPS layout version, capacity or duplicate IDs.");
@@ -174,7 +188,16 @@ internal sealed class SpsBoardStore(string file)
                 Response = wire.Response, InputMin = wire.InputMin, InputMax = wire.InputMax, Gain = wire.Gain, DeadZone = wire.DeadZone,
                 SmoothingMs = wire.SmoothingMs, TimeoutMs = wire.TimeoutMs }]);
         }
+        if(board.AutomaticToyOptions.Any(o=>o is null) || board.AutomaticToyOptions.Select(o=>o.Target).Distinct().Count()!=board.AutomaticToyOptions.Count)
+            throw new InvalidDataException("Use one automatic setting per toy function.");
+        foreach(var option in board.AutomaticToyOptions) ValidateAutomatic(option);
         _ = SpsBoardModel.Compile(board with { AllToysToAllHoles = false });
+    }
+    internal static void ValidateAutomatic(SpsWire option)
+    {
+        if(option.HoleId!="" || option.ExactInputs is null || option.ExactInputs.Count!=0 || string.IsNullOrWhiteSpace(option.Id) || option.Id.Length>64
+            || !SpsStore.ValidTarget(option.Target) || !SpsStore.ValidResponse(option.Response,option.InputMin,option.InputMax,option.Gain,option.DeadZone,option.SmoothingMs,option.TimeoutMs))
+            throw new InvalidDataException("Check the automatic toy function and response settings.");
     }
     public void Save(SpsBoardDocument board)
     {

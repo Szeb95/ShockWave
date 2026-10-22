@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ShockWave</AssemblyName>
-    <Version>0.7.6</Version>
+    <Version>0.7.7</Version>
     <RootNamespace>ShockWave.Overlay</RootNamespace>
     <Product>ShockWave</Product>
     <Title>ShockWave</Title>
@@ -36,6 +36,7 @@
     <Content Include="..\bridge\bridge.mjs" Link="bridge\bridge.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\pishock.mjs" Link="bridge\pishock.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\remote-peer.mjs" Link="bridge\remote-peer.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\remote-friends.mjs" Link="bridge\remote-friends.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\remote-worker.mjs" Link="bridge\remote-worker.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\capture.mjs" Link="bridge\capture.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\live-logs.mjs" Link="bridge\live-logs.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />

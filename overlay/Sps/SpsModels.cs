@@ -111,6 +111,11 @@ internal sealed class SpsStore(string? filePath = null)
                 throw new InvalidDataException("Socket depth needs the matching root and tip contacts.");
         }
     }
+    internal static bool ValidTarget(SpsTarget? t) => t is not null && !string.IsNullOrWhiteSpace(t.DeviceKey) && t.DeviceKey.Length<=128
+        && !string.IsNullOrWhiteSpace(t.ChannelId) && t.ChannelId.Length<=64 && !t.DeviceKey.Any(char.IsControl) && !t.ChannelId.Any(char.IsControl);
+    internal static bool ValidResponse(SpsResponse response,double min,double max,double gain,int dead,int smoothing,int timeout) => Enum.IsDefined(response)
+        && double.IsFinite(min) && double.IsFinite(max) && min>=-1000 && max<=1000 && min<max
+        && double.IsFinite(gain) && gain is >=0 and <=10 && dead is >=0 and <=99 && smoothing is >=0 and <=2000 && timeout is >=250 and <=10000;
     public void Save(List<SpsRule> rules) { Write(PathName, rules); Warning = null; }
     public static void Write(string file, List<SpsRule> rules)
     {

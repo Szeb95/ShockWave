@@ -1,5 +1,7 @@
 # Sources and verification notes
 
+**Socket enabled display, 2026-10-22:** the official VRCFury [BakeHapticSocketsService](https://github.com/VRCFury/VRCFury/blob/main/com.vrcfury.vrcfury/Editor-Avatars/Service/BakeHapticSocketsService.cs) generates a unique `oscId`, creates its menu Bool when `addMenuItem` is enabled, uses it to animate socket activation, and exports contacts under `OGB/Orf/` with slash-to-underscore ID normalization. ShockWave's unique generated Bool-to-known-socket match is an inference from that generation relationship, not a universal SPS enabled parameter. A read-only local VRChat snapshot exposed three matching Bools for known socket IDs (all false), without an output controller/settings change. Missing menu items, ambiguity or a different generator remain unknown. The display-only implementation does not copy upstream code or change contact math/output permissions. See PROTOCOL/STATUS for bounds and simulated versus live-read evidence.
+
 Checked during the planning conversation on 2026-10-07. Recheck provider plans and SDK requirements before implementation; this file records the basis for decisions, not a guarantee of future availability.
 
 ## Lovense

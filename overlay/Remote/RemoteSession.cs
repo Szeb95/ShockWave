@@ -8,7 +8,7 @@ namespace ShockWave.Overlay;
 // Owned by the UI thread. Hardware lease expiry remains in LocalToyController,
 // independent of this thread, the helper, and the network worker.
 internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<LocalToyController?> controller,
-    Func<BridgeConfig> config, Action<string, string, int, int, long> shock) : IDisposable
+    Func<BridgeConfig> config, Action<string, string, int, int, long> shock, IRemoteFriendStore? friendStore = null) : IDisposable
 {
     internal static readonly JsonSerializerOptions Json = new() { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, PropertyNameCaseInsensitive = true };
     internal const int StateLifetimeMs = 500;
@@ -23,6 +23,8 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
     private readonly Dictionary<(string, string), long> loggedRejections = [];
     private readonly Guid source = Guid.NewGuid();
     private RemoteWorker? worker;
+    private readonly RemoteFriendBook friendBook = new(friendStore ?? new MemoryRemoteFriendStore());
+    private string pairingPeer = "", pendingFriendName = "", friendNotice = "";
     private string session = "", lastInventory = "";
     private long heartbeatAt, inventoryAt, stateAt;
     private long tickAt, maximumTickGap, logWindow;
@@ -37,16 +39,32 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
     public string Invitation { get; private set; } = "";
     public string Status { get; private set; } = "Disconnected · Connect is off";
     public double RoundTripMs { get; private set; }
+    public IReadOnlyList<RemoteFriend> Friends => friendBook.Friends;
+    public string SelectedFriendId { get; private set; } = "";
+    public bool CanRememberFriend { get; private set; }
+    public bool RememberingFriend { get; private set; }
+    public string FriendNotice => friendBook.Notice.Length > 0 ? friendBook.Notice : friendNotice;
     public event Action? Changed, Paired;
     public event Action<string>? Log;
     internal event Action<string>? Diagnostic;
     public void Connect(string code, string node, string directory)
+        => StartConnection(code, null, node, directory);
+    public void ConnectFriend(string id, string node, string directory)
+    {
+        var friend = Friends.FirstOrDefault(f => f.Id == id);
+        if (friend is null) { friendNotice = "Choose a saved friend, or pair using a new code."; Changed?.Invoke(); return; }
+        StartConnection("", friend, node, directory);
+    }
+    private void StartConnection(string code, RemoteFriend? friend, string node, string directory)
     {
         EndSession();
+        if (!friendBook.Prepare()) { Disconnect(); Status = friendBook.Notice; Changed?.Invoke(); return; }
+        SelectedFriendId = friend?.Id ?? ""; friendNotice = ""; Invitation = "";
         try
         {
             worker ??= new(node, directory); Enabled = true;
-            worker.Send(new { kind = "enable", code }); Status = "Connecting · direct app-to-app · TURN disabled";
+            worker.Send(new { kind = "enable", code, identity = friendBook.Id, friend = friend is null ? null : new { friend.Id, friend.Secret } });
+            Status = friend is null ? "Connecting · direct app-to-app · TURN disabled" : "Waiting for saved friend · both Connect switches must be on";
             Report("Connect enabled · encrypted direct app-to-app · TURN disabled.");
         }
         catch (Exception e) when (e is IOException or InvalidOperationException or System.ComponentModel.Win32Exception)
@@ -61,6 +79,58 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
         leases.Clear(); claims.Clear(); targets.Clear(); shockTargets.Clear(); aliases.Clear(); shockIds.Clear();
         Toys.Disconnect(); Shockers = []; Connected = false; session = lastInventory = "";
         loggedRejections.Clear(); outgoingCount = -1; maximumTickGap = 0; unknownSnapshots = 0;
+        CanRememberFriend = RememberingFriend = false; pairingPeer = "";
+    }
+    public void RememberFriend(string name)
+    {
+        if (!Connected || !CanRememberFriend || RememberingFriend) return;
+        if (name.Length > 48 || name.Any(char.IsControl)) { friendNotice = "Use a friend name of up to 48 characters."; Changed?.Invoke(); return; }
+        pendingFriendName = name.Trim(); RememberingFriend = true; friendNotice = "Saving this pairing on both apps…";
+        worker?.Send(new { kind = "remember-friend" }); Changed?.Invoke();
+    }
+    public void RenameFriend(string id, string name)
+    {
+        if (friendBook.Rename(id, name)) friendNotice = "Friend name saved on this app.";
+        Changed?.Invoke();
+    }
+    public void ForgetFriend(string id)
+    {
+        if (!Friends.Any(f => f.Id == id)) return;
+        // Kill the worker too: it must not retain a forgotten key or old invitation in RAM.
+        Disconnect(); worker?.Dispose(); worker = null;
+        if (friendBook.Forget(id)) { SelectedFriendId = ""; Invitation = ""; friendNotice = "Friend forgotten. A new code is required to pair again."; }
+        Changed?.Invoke();
+    }
+    private void FriendEvent(JsonElement item)
+    {
+        if (!Enabled || !Connected || !item.TryGetProperty("session", out var bound) || bound.GetString() != session) return;
+        switch (item.GetProperty("kind").GetString())
+        {
+            case "friend-ready":
+                pairingPeer = item.GetProperty("id").GetString() ?? "";
+                CanRememberFriend = RemoteFriendStore.ValidId(pairingPeer) && item.GetProperty("available").GetBoolean() && !Friends.Any(f => f.Id == pairingPeer);
+                break;
+            case "friend-save":
+                var request = item.GetProperty("request").GetString() ?? "";
+                var id = item.GetProperty("id").GetString() ?? "";
+                if (!Regex.IsMatch(request, "^[a-f0-9]{32}$") || id != pairingPeer) return;
+                var name = item.GetProperty("outgoing").GetBoolean() ? pendingFriendName : "";
+                var saved = friendBook.Remember(id, item.GetProperty("secret").GetString() ?? "", name);
+                worker?.Send(new { kind = "friend-stored", request, ok = saved });
+                if (!saved) { RememberingFriend = false; friendNotice = "Pairing was not saved on both apps."; }
+                break;
+            case "friend-saved":
+                var friendId = item.GetProperty("id").GetString() ?? "";
+                if (!Friends.Any(f => f.Id == friendId)) return;
+                SelectedFriendId = friendId; CanRememberFriend = RememberingFriend = false;
+                pendingFriendName = ""; friendNotice = "Friend saved on both apps. Next time, choose this friend and press Connect.";
+                Report("Friend pairing saved; future connections still start with no activity.");
+                break;
+            case "friend-failed":
+                RememberingFriend = false; friendNotice = "Friend save was not confirmed. Check both apps and try again, or use a new code.";
+                break;
+        }
+        Changed?.Invoke();
     }
     private void Send(string type, object payload) => worker?.Send(new { kind = "send", type, payload, createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
     public void Tick()
@@ -83,6 +153,7 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
                 {
                     case "diagnostic": Diagnostic?.Invoke(item.GetRawText()); break;
                     case "health": ReportHealth(item); break;
+                    case "friend-ready": case "friend-save": case "friend-saved": case "friend-failed": FriendEvent(item); break;
                     case "invitation": Invitation = item.GetProperty("code").GetString() ?? ""; Changed?.Invoke(); break;
                     case "status": if (!Connected) { Status = item.GetProperty("detail").GetString() ?? "Waiting"; Changed?.Invoke(); } break;
                     case "error": Enabled = false; EndSession(); Status = item.GetProperty("detail").GetString() ?? "Connection failed"; Report("Connection helper reported an error; Connect is off."); Changed?.Invoke(); break;

@@ -28,7 +28,7 @@ ShockWave is a native Windows application for supported Bluetooth toys and OpenS
 | **Bluetooth toy controls** | Discover supported Lovense toys, see individual functions and battery readings, and adjust Input, Sensitivity and Max %. |
 | **Draw and play patterns** | Select functions, draw curves, record and loop them through Toy control. Touch and Pointer modes also work with the optional avatar panel. |
 | **Shocker control** | Use OpenShock or PiShock with individual limits, pause and cooldown. Shock uses a fresh ARM → release → confirm action for every command. |
-| **VRChat and SPS** | Receive local OSC inputs and connect recognized SPS contacts to toy functions on the body map. |
+| **VRChat and SPS** | Shared automatic SPS controls, plug/socket discovery and optional manual body-map connections. |
 | **Direct app connections** | Pair two ShockWave apps using a private code. Each receiver controls its own hardware and applies its own limits. |
 | **Test mode** | Preview supported control paths without sending physical output. |
 
