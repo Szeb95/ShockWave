@@ -107,6 +107,9 @@ internal sealed partial class OverlayForm : Form
         toyControlPage.Session.Shockers.Send = SendPanelShocker;
         toyControlPage.Session.PageChanged += () => { if(toyControlPage.Visible) ShowPage(toyControlPage,toyControlPage.Session.ShockerPage ? shockerControlNav : toyControlNav); };
         remoteSession.Changed += UpdateRemoteGate;
+        remoteSession.Log += message => AppendLog("remote", message);
+        remoteSession.Toys.Log += message => AppendLog("remote", message);
+        toyControlPage.Session.Log += message => AppendLog("remote", message);
         toyControlPage.OscInput += spsPage.Receive;
         toyControlPage.OscReset += spsPage.ResetInput;
         toyControlPage.SpsPresence = () => spsPage.SignalsEnabled;
@@ -494,8 +497,15 @@ internal sealed partial class OverlayForm : Form
         logTitle.SetBounds(0, 0, 220, 35);
         var logSubtitle = Label("Recent activity from this session", 9, false, Muted);
         logSubtitle.SetBounds(0, 42, 310, 25);
-        var clear = StyledButton("Clear view", false);
+        var clear = StyledButton("Clear", false);
         var copy = StyledButton("Copy log", false);
+        var copyRemote = StyledButton("Copy remote log", false);
+        copyRemote.Width = 150; copyRemote.FlatAppearance.BorderSize = 0;
+        copyRemote.Click += (_, _) =>
+        {
+            try { Clipboard.SetText(RemoteLogText()); }
+            catch (Exception) { AppendLog("error", "Could not copy the remote log."); }
+        };
         copy.Width = 100;
         copy.FlatAppearance.BorderSize = 0;
         copy.Click += (_, _) =>
@@ -504,16 +514,18 @@ internal sealed partial class OverlayForm : Form
             catch (Exception error) { AppendLog("error", "Could not copy the log: " + error.Message); }
         };
         clear.FlatAppearance.BorderSize = 0;
-        clear.Click += (_, _) => logGrid.Rows.Clear();
+        clear.Click += (_, _) => { recentLog.Clear(); logGrid.Rows.Clear(); };
         logHeader.Controls.Add(logTitle);
         logHeader.Controls.Add(logSubtitle);
         logHeader.Controls.Add(clear);
         logHeader.Controls.Add(copy);
+        logHeader.Controls.Add(copyRemote);
         logHeader.Resize += (_, _) =>
         {
             clear.Location = new Point(Math.Max(0, logHeader.Width - clear.Width), 4);
             copy.Location = new Point(Math.Max(0, clear.Left - copy.Width - 12), 4);
-            logTitle.Width = Math.Max(1, copy.Left - 12);
+            copyRemote.Location = new Point(Math.Max(0, copy.Left - copyRemote.Width - 12), 4);
+            logTitle.Width = Math.Max(1, copyRemote.Left - 12);
             logSubtitle.Width = logHeader.Width;
         };
         layout.Controls.Add(logHeader, 0, 0);

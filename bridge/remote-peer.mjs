@@ -93,7 +93,13 @@ export class DirectPeer {
   }
   send(kind, payload, fast = false, sentAt = Date.now()) {
     if (!this.ready) return false;
-    return this.sendRaw({ version: 1, session: this.session, kind, sequence: ++this.sequence, sentAt, payload }, fast);
+    const sent = this.sendRaw({ version: 1, session: this.session, kind, sequence: ++this.sequence, sentAt, payload }, fast);
+    if (kind === 'state') { const stats = this.metrics(); if (sent) stats.sent++; else stats.blocked++; }
+    return sent;
+  }
+  metrics() {
+    return this.stateMetrics ??= { sent: 0, received: 0, expired: 0, future: 0, blocked: 0,
+      maxAgeMs: 0, maxGapMs: 0, minRemainingMs: STATE_LIFETIME_MS, rttMs: 0, uncertaintyMs: 0 };
   }
   receive(data, channel) {
     if (this.closed || data.length > 60000) return;
@@ -115,6 +121,7 @@ export class DirectPeer {
         this.pings.delete(msg.id); const t4 = Date.now(), rtt = t4 - msg.t1 - (msg.t3 - msg.t2);
         if (rtt < 0 || rtt > 1000) return;
         this.offset = ((msg.t2 - msg.t1) + (msg.t3 - t4)) / 2; this.uncertainty = rtt / 2 + 5;
+        const stats = this.metrics(); stats.rttMs = Math.max(stats.rttMs, rtt); stats.uncertaintyMs = Math.max(stats.uncertaintyMs, this.uncertainty);
         this.lastRx = performance.now();
         if (!this.ready) {
           this.ready = true; clearTimeout(this.deadline); this.event({ kind: 'connected', session: this.session });
@@ -128,9 +135,20 @@ export class DirectPeer {
       }
       if (msg.version !== 1 || msg.session !== this.session || !Number.isSafeInteger(msg.sequence) || msg.sequence <= (this.lastSequence.get(msg.kind) ?? 0) || !Number.isSafeInteger(msg.sentAt)) return;
       const age = Date.now() - (msg.sentAt - this.offset);
+      if (msg.kind === 'state') {
+        const stats = this.metrics(); stats.maxAgeMs = Math.max(stats.maxAgeMs, Math.max(0, age));
+        stats.minRemainingMs = Math.min(stats.minRemainingMs, Math.max(0, STATE_LIFETIME_MS - Math.max(0, age) - this.uncertainty));
+        if (age < -this.uncertainty) stats.future++;
+        else if (age + this.uncertainty >= STATE_LIFETIME_MS) stats.expired++;
+      }
       if (age < -this.uncertainty || age + this.uncertainty >= messageLifetimeMs(msg.kind)) return;
       if (!['inventory', 'state', 'shock', 'result', 'stop'].includes(msg.kind) || (channel === 'sw-state' && msg.kind !== 'state')) return;
       this.lastSequence.set(msg.kind, msg.sequence); this.lastRx = performance.now();
+      if (msg.kind === 'state') {
+        const stats = this.metrics(), now = performance.now(); stats.received++;
+        if (this.lastStateAt !== undefined) stats.maxGapMs = Math.max(stats.maxGapMs, now-this.lastStateAt);
+        this.lastStateAt = now;
+      }
       this.event({ kind: 'message', message: msg, receivedAt: Date.now(), remainingMs: messageLifetimeMs(msg.kind) - Math.max(0, age) - this.uncertainty });
     } catch { this.close('Invalid peer connection'); }
   }
@@ -139,6 +157,13 @@ export class DirectPeer {
     if (this.closed) return;
     if (this.authenticated && performance.now() - (this.lastPing ?? 0) > 1000) { this.lastPing = performance.now(); this.ping(); }
     if (this.ready && performance.now() - this.lastRx > 2500) this.close('Peer connection timed out');
+    if (this.ready && performance.now() - (this.lastHealthAt ?? 0) >= 5000) this.reportHealth();
+  }
+  reportHealth() {
+    const stats = this.metrics();
+    // Numeric aggregates only: no codes, endpoints, session/device IDs or payloads.
+    this.event({ kind: 'health', ...Object.fromEntries(Object.entries(stats).map(([key, value]) => [key, Math.round(value)])) });
+    this.lastHealthAt = performance.now(); this.stateMetrics = null;
   }
   close(detail = 'Disconnected') {
     if (this.closed) return; this.closed = true; this.ready = false; clearInterval(this.timer); clearTimeout(this.deadline);

@@ -15,7 +15,7 @@ internal static class Program
         Application.EnableVisualStyles();
         try
         {
-            Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); Panel();
+            Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); Panel();
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
             File.WriteAllText(Path.Combine(artifacts, "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
@@ -210,6 +210,7 @@ internal static class Program
         using var receiver = new Fixture(); using var sender = new Fixture();
         sender.Session.Toys.Replace(receiver.Session.PublishInventory().Toys);
         using var graph = new ToyControlSession(() => null, () => null) { Remote=sender.Session.Toys };
+        var graphLog = new List<string>(); graph.Log += graphLog.Add;
         graph.Tick(ToyOscRouter.Clock); graph.Action("InRow0",false);
         var row = graph.Model.Functions.First();
         row.Function.Pattern = new ShockWave.ShaderLab.PatternClip([new(0,.4f),new(1,.7f)]);
@@ -223,6 +224,7 @@ internal static class Program
         row = graph.Model.Functions.First();
         Check(row.Selected && !row.Function.LoopRunning && row.Function.Level==0 && sender.Session.Toys.Levels().Length==0,
             "remote timeout keeps the user's selection but stops the loop and all outgoing activity");
+        Check(graph.Model.Level==0,"graph percentage and new history samples fall to zero with the selected stopped toy");
         graph.Tick(ToyOscRouter.Clock);
         Check(sender.Session.Toys.Levels().Length==0,"keeping a row selected never rearms expired output on its own");
         graph.Action("InPlay",false); graph.Tick(ToyOscRouter.Clock);
@@ -257,6 +259,8 @@ internal static class Program
             "a held avatar pointer keeps selection without reclaiming rejected output");
         Vrc("InPointerLPress",false); graph.Tick(ToyOscRouter.Clock); Vrc("InPointerLPress",true); graph.Tick(ToyOscRouter.Clock);
         Check(sender.Session.Toys.Levels().Single().Claim>pointer.Claim,"fresh avatar pointer resumes without selecting the row again");
+        graph.VrcLost();
+        Check(graphLog.Any(s=>s.Contains("VRC panel link")),"avatar-link interruption is logged separately from peer/network loss");
         graph.StopAll(); Check(graph.Model.SelectedCount==0 && sender.Session.Toys.Levels().Length==0,"explicit Stop all still clears selection and activity");
         using var mixed = new ToyControlSession(()=>sender.Adapter.Snapshot,()=>sender.Controller) {Remote=sender.Session.Toys};
         mixed.Tick(ToyOscRouter.Clock);
@@ -268,11 +272,66 @@ internal static class Program
         Check(mixed.Model.Touching && mixed.Model.Recording && sender.Controller.State("fixture","v1").RequestedPercent>0,
             "a deselected remote toy timing out cannot interrupt recording on an unrelated local toy");
     }
+    private static void RemoteDiagnostics()
+    {
+        using var owner = new Fixture(); using var sender = new Fixture();
+        var receiverLog = new List<string>(); var senderLog = new List<string>();
+        owner.Session.Log += receiverLog.Add; sender.Session.Log += senderLog.Add;
+        var toy = owner.Session.PublishInventory().Toys.Single();
+        var frame = new RemoteLevel(toy.Id,toy.Functions[0].Id,65,1);
+        owner.Session.Receive("state",Element(new[]{frame}),25);
+        Wait(()=>owner.Controller.State("fixture","v1").RequestedPercent==0,"diagnostic fixture expires independently of UI input");
+        owner.Session.Receive("state",Element(new[]{frame}));
+        Check(receiverLog.Any(s=>s.Contains("input freshness expired") && s.Contains("Last accepted") && s.Contains("previous lease")),
+            "receiver logs expired claim timing rather than calling it a network disconnect");
+        var count = receiverLog.Count;
+        for(var i=0;i<50;i++) owner.Session.Receive("state",Element(new[]{frame}));
+        Check(receiverLog.Count==count,"repeated rejected frames do not flood the diagnostic log");
+        sender.Session.Toys.Replace([toy]);
+        using var graph = new ToyControlSession(()=>null,()=>null) {Remote=sender.Session.Toys};
+        graph.Tick(ToyOscRouter.Clock); graph.Action("InRow0",false); graph.Action("InRow1",false);
+        graph.Draw(new(600,300),false,true); graph.Release(false); graph.Tick(ToyOscRouter.Clock);
+        var levels = sender.Session.Toys.Levels();
+        foreach(var value in levels) sender.Session.Receive("result",Element(value with {Reason="input-expired"}));
+        graph.Tick(ToyOscRouter.Clock);
+        Check(graph.Model.SelectedCount==2 && graph.Model.Level==0 && graph.Model.Functions.All(f=>f.Level==0),
+            "two stopped selected motors agree with the zero-percent heading and history");
+        Check(senderLog.Count(s=>s.Contains("Friend stopped toy input") && s.Contains("input freshness expired"))==2,
+            "sender logs the receiving app's reason for each stopped input");
+        sender.Session.ReportHealth(Element(new{sent=150,received=140,expired=3,future=0,blocked=1,maxAgeMs=510,maxGapMs=600,minRemainingMs=0,rttMs=420,uncertaintyMs=215,secret="private-fixture-marker",endpoint="private-fixture-marker"}));
+        Check(senderLog.Any(s=>s.Contains("sent 150, received 140, expired 3") && s.Contains("clock uncertainty 215")),
+            "bounded network summary exposes timing drops and clock uncertainty");
+        Check(receiverLog.Concat(senderLog).All(s=>!s.Contains(toy.Id) && !s.Contains(toy.Functions[0].Id) && !s.Contains("private-fixture-marker")),
+            "diagnostic logs exclude session aliases and unexpected private fields");
+        graph.Draw(new(600,300),false,true); graph.Tick(ToyOscRouter.Clock);
+        var fresh = sender.Session.Toys.Levels().First();
+        sender.Session.Receive("result",Element(fresh with {Reason="private-fixture-marker"}));
+        Check(senderLog.All(s=>!s.Contains("private-fixture-marker")),"peer-supplied rejection text is allowlisted rather than copied to logs");
+    }
     private static void Panel()
     {
         using var toys = new LocalToysPage(); using var form = new OverlayForm(new BridgeConfig(),initialSaveConfig:_=>{},initialLocalToys:toys);
         Button Nav(string name) => (Button)typeof(OverlayForm).GetField(name,BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
         Check(Nav("remoteNav").Top > Nav("spsNav").Top && Nav("remoteNav").Top < Nav("logsNav").Top, "Connect tab is between SPS and Log");
+        var formRemote = (RemoteSession)typeof(OverlayForm).GetField("remoteSession",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
+        formRemote.ReportHealth(Element(new{sent=12,received=10}));
+        var formLog = (List<string>)typeof(OverlayForm).GetField("recentLog",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
+        Check(formLog.Any(s=>s.Contains("REMOTE") && s.Contains("Network 5s: sent 12")),"normal app Log page receives remote diagnostics");
+        formLog.Add("00:00:00  OTHER  unrelated-fixture-marker");
+        Check(form.RemoteLogText().Contains("Network 5s: sent 12") && form.RemoteLogText().Contains("ShockWave") && !form.RemoteLogText().Contains("unrelated-fixture-marker"),
+            "Copy remote log includes version/timing and remote events without unrelated activity");
+        var logPage = (Control)typeof(OverlayForm).GetField("logsPage",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
+        IEnumerable<Control> Descendants(Control parent) => parent.Controls.Cast<Control>().SelectMany(child=>new[]{child}.Concat(Descendants(child)));
+        var logButtons = Descendants(logPage).OfType<Button>().ToArray();
+        Check(new[]{"Copy log","Copy remote log","Clear"}.All(text=>logButtons.Any(b=>b.Text==text)),"Log page exposes both copy actions and Clear");
+        // Host only the page; showing the normal app form would start devices.
+        using var logPreview = new Form {Width=620,Height=440,BackColor=Color.FromArgb(30,31,34),ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
+        logPreview.Controls.Add(logPage); logPage.Dock=DockStyle.Fill; logPage.Visible=true; logPreview.Show(); Application.DoEvents();
+        Check(logButtons.All(b=>b.Visible && b.Left>=0 && b.Right<=b.Parent!.ClientSize.Width),"copy and clear buttons fit the minimum-width log page");
+        using(var logImage=new Bitmap(logPreview.ClientSize.Width,logPreview.ClientSize.Height)) {logPreview.DrawToBitmap(logImage,logPreview.ClientRectangle); logImage.Save(Path.Combine(artifacts,"log-page.png"));}
+        logButtons.Single(b=>b.Text=="Clear").PerformClick();
+        Check(formLog.Count==0 && !form.RemoteLogText().Contains("Network 5s"),"Clear removes both visible history and the copy buffer");
+        logPreview.Hide();
         using var f = new Fixture(); using var page = new RemotePage(f.Session,()=>"node.exe",Path.GetFullPath("bridge"));
         using var preview = new Form { Width=1050,Height=870,ShowInTaskbar=false,Location=new(-32000,-32000),StartPosition=FormStartPosition.Manual };
         preview.Controls.Add(page); preview.Show(); Application.DoEvents();

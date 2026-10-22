@@ -7,7 +7,11 @@ internal sealed record RemoteToyFunction(string Id, string Name, string Type, in
 internal sealed record RemoteToyInfo(string Id, string Name, int? Battery, RemoteToyFunction[] Functions);
 internal sealed record RemoteShockerInfo(string Id, string Name, string Service, int Maximum, int DurationMs);
 internal sealed record RemoteInventory(RemoteToyInfo[] Toys, RemoteShockerInfo[] Shockers);
-internal sealed record RemoteLevel(string Device, string Channel, int Percent, long Claim);
+internal sealed record RemoteLevel(string Device, string Channel, int Percent, long Claim)
+{
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? Reason { get; init; }
+}
 
 // Session-only proxy: it has no Bluetooth/native transport and never saves activity.
 internal sealed class RemoteToyController(Func<bool> testMode) : IToyInputController
@@ -15,6 +19,8 @@ internal sealed class RemoteToyController(Func<bool> testMode) : IToyInputContro
     private sealed class Channel { public int Percent; public Guid Source; public long Generation, Deadline, Claim; }
     private readonly Dictionary<(string, string), Channel> channels = [];
     private long generation;
+    public event Action<string>? Log;
+    public int ActiveInputCount => channels.Values.Count(c => c.Source != Guid.Empty);
     public bool TestMode => testMode();
     public ToyAdapterSnapshot Snapshot { get; private set; } = new(ToyAdapterAvailability.Ready, false, "No remote toys", []);
     public void Replace(RemoteToyInfo[] toys)
@@ -58,9 +64,14 @@ internal sealed class RemoteToyController(Func<bool> testMode) : IToyInputContro
     public void Stop(string? device = null) { foreach (var pair in channels.Where(p => device is null || p.Key.Item1 == device)) Reset(pair.Value); }
     public RemoteLevel[] Levels()
     {
-        foreach (var c in channels.Values.Where(c => c.Source != Guid.Empty && Stopwatch.GetTimestamp() >= c.Deadline)) Reset(c);
+        var expired = channels.Values.Where(c => c.Source != Guid.Empty && Stopwatch.GetTimestamp() >= c.Deadline).ToArray();
+        foreach (var c in expired) Reset(c);
+        if (expired.Length > 0) Log?.Invoke($"Local drawing heartbeat expired for {expired.Length} remote functions; output stopped, fresh input required.");
         return TestMode ? [] : channels.Where(p => p.Value.Source != Guid.Empty).Select(p => new RemoteLevel(p.Key.Item1[7..], p.Key.Item2, p.Value.Percent, p.Value.Claim)).ToArray();
     }
-    public void Reject(string device, string channel, long claim)
-    { if (channels.TryGetValue(("remote/" + device, channel), out var c) && c.Claim == claim) Reset(c); }
+    public bool Reject(string device, string channel, long claim)
+    {
+        if (!channels.TryGetValue(("remote/" + device, channel), out var c) || c.Claim != claim || c.Source == Guid.Empty) return false;
+        Reset(c); return true;
+    }
 }

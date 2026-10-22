@@ -25,6 +25,16 @@ test('toy jitter budget preserves original age and clock uncertainty; shock expi
   assert.equal(events.at(-1).remainingMs, 89);
   assert.equal(messageLifetimeMs('shock'), 250);
   assert.equal(messageLifetimeMs('inventory'), 3000);
+  peer.sendRaw = () => false;
+  peer.send('state', [] ,true);
+  peer.reportHealth();
+  const health = events.at(-1);
+  assert.equal(health.kind, 'health');
+  assert.equal(health.received, 2); assert.equal(health.expired, 2); assert.equal(health.future, 1); assert.equal(health.blocked, 1);
+  assert.equal(health.maxAgeMs, 500); assert.equal(health.minRemainingMs, 0);
+  assert.ok(Object.entries(health).every(([key,value]) => key === 'kind' || Number.isFinite(value)));
+  assert.ok(!JSON.stringify(health).includes('fixture') && !('session' in health) && !('payload' in health));
+  assert.equal(peer.metrics().received, 0, 'reported counters reset instead of growing without bound');
 });
 
 test('real encrypted peers sustain toy state with 150 ms RTT, jitter and loss, then expire silence', { timeout: 30000 }, async () => {

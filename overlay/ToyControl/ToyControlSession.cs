@@ -25,6 +25,7 @@ internal sealed class ToyControlSession : IDisposable
     public bool ShockerPage { get; private set; }
     public PanelModel DisplayModel => ShockerPage ? Shockers.Model : Model;
     public event Action? PageChanged;
+    public event Action<string>? Log;
     private bool lastTestMode;
     public void SetPage(bool shockers)
     {
@@ -106,6 +107,7 @@ internal sealed class ToyControlSession : IDisposable
             if (!bindings.ContainsKey(key) && State(key) is { } state && Math.Abs(row.Function.Level - state.RequestedPercent / 100f) > .00001)
                 ResetFromOwner(key);
         }
+        Model.RefreshIdleDisplay();
     }
     private static string Name(string value) => new string(value.Where(c => !char.IsControl(c)).Take(96).ToArray()) is { Length: > 0 } clean ? clean : "Toy";
     private ToyChannelState? State((string Toy, string Function) key)
@@ -204,6 +206,7 @@ internal sealed class ToyControlSession : IDisposable
     }
     public void StopAll()
     {
+        if (bindings.Keys.Any(k=>k.Toy.StartsWith("remote/",StringComparison.Ordinal))) Log?.Invoke("Stop all ended the graph's remote toy inputs.");
         Shockers.Cancel();
         Model.Release(false); Model.StopAll(); controller?.Stop(); Remote?.Stop(); bindings.Clear(); Vrc.BlockTouch(); ClearRequested = true;
         foreach (var row in Model.Functions) row.Function.Selected = false;
@@ -216,6 +219,7 @@ internal sealed class ToyControlSession : IDisposable
     }
     public void VrcLost()
     {
+        if (bindings.Values.Any(b=>b.Vrc)) Log?.Invoke("VRC panel link interrupted or hidden; avatar-owned toy inputs ended, fresh input required.");
         Shockers.Cancel();
         if (drawingVrc) Model.Release(false);
         foreach (var key in bindings.Where(b => b.Value.Vrc).Select(b => b.Key).ToArray()) End(key, true);
@@ -228,6 +232,7 @@ internal sealed class ToyControlSession : IDisposable
     }
     public void Suspend()
     {
+        if (bindings.Count > 0) Log?.Invoke("Toy control paused; graph input ended, fresh input required.");
         Shockers.Cancel();
         Model.Release(false); Vrc.Reset();
         foreach(var key in bindings.Keys.ToArray()) End(key,true);

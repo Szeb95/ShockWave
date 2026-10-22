@@ -66,6 +66,17 @@ internal sealed partial class PanelModel
         }
     }
 
+    // Display-only synchronization: never edits functions, leases or patterns.
+    public void RefreshIdleDisplay()
+    {
+        if (Touching || DisplayLoop is not null) return;
+        var selected = Functions.Where(f => f.Connected && f.Selected).ToArray();
+        if (selected.Length == 0 || selected.Any(f => Math.Abs(f.Level-selected[0].Level) > .00001f)) return;
+        var value = selected[0].Level;
+        if (Math.Abs(Level-value) < .00001f) return;
+        Level = value; TouchPosition = new(TouchPosition.X,value); Revision++;
+    }
+
     private static void ValidateText(string text, string label)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length > 96 || text.Any(char.IsControl)) throw new FormatException("Invalid " + label);

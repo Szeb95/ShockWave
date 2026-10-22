@@ -9,6 +9,7 @@ let secret = randomBytes(32).toString('hex'), expires = Date.now() + 86400000;
 const token = randomBytes(24).toString('hex');
 let socket, peer, target, remoteId, connectionId, enabled = false, retryAt = 0, heartbeat = performance.now();
 const seenOffers = new Set();
+let expiredOutgoingState = 0;
 const offerProof = (key, id, sdp) => createHmac('sha256', Buffer.from(key, 'hex')).update(id + '\n' + sdp.type + '\n' + sdp.sdp).digest('hex');
 const signal = (type, payload) => {
   if (socket?.readyState === 1) {
@@ -23,7 +24,8 @@ function closePeer() { const old = peer; peer = null; old?.close(); }
 function createPeer(initiator) {
   peer = new DirectPeer({ secret: initiator ? target.secret : secret, initiator, signal, event: value => {
     if (value.kind === 'disconnected') { retryAt = performance.now() + 5000; }
-    emit(value);
+    if (value.kind === 'health') { emit({ ...value, ipcExpired: expiredOutgoingState }); expiredOutgoingState = 0; }
+    else emit(value);
   } }); return peer;
 }
 async function join() {
@@ -79,6 +81,7 @@ input.on('line', line => {
       const age = Date.now() - msg.createdAt;
       if (Number.isSafeInteger(msg.createdAt) && age >= -10 && age < messageLifetimeMs(msg.type))
         peer?.send(msg.type, msg.payload, msg.type === 'state', msg.createdAt);
+      else if (msg.type === 'state') expiredOutgoingState++;
     }
   } catch { disable(); emit({ kind: 'error', detail: 'Invalid or expired connection code. Connect is off.' }); }
 });

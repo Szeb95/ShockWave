@@ -4,6 +4,9 @@ namespace ShockWave.Overlay;
 
 internal sealed partial class OverlayForm
 {
+    internal string RemoteLogText() => string.Join(Environment.NewLine,
+        new[] { $"ShockWave {typeof(OverlayForm).Assembly.GetName().Version} remote diagnostics · copied {DateTimeOffset.Now:O}" }
+        .Concat(recentLog.Where(line => line.Contains("  REMOTE  ", StringComparison.Ordinal))));
     private void UpdateRemoteGate()
     {
         if (bridge is not { HasExited: false } || stopRequested || closing) return;
