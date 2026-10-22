@@ -2,6 +2,14 @@
 
 Updated: 2026-10-23.
 
+## 2026-10-23 — 0.7.9 and VCC 0.1.0 publication verified
+
+- **Published:** [Windows 0.7.9](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.9) and separate [Avatar Panel 0.1.0](https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.0), both targeting verified source `bd19635c4b9be82ffe9070bddc715cdbeb518b14`. The avatar release has latest disabled. The unauthenticated GitHub latest endpoint selects Windows v0.7.9 with its complete ZIP and SHA-256 digest; the in-app updater is preserved.
+- **VCC live:** [Add to Creator Companion](https://szeb95.github.io/ShockWave/) and the [repository index](https://szeb95.github.io/ShockWave/index.json) return HTTP 200. README links the landing page below A look inside. Anonymous downloads of both public ZIPs match the final tested hashes recorded above. VPM listing checksum matches the public avatar ZIP.
+- **Hosted verification:** [source checks](https://github.com/Szeb95/ShockWave/actions/runs/39863731964) and [listing deployment](https://github.com/Szeb95/ShockWave/actions/runs/39863731892) succeeded. The version-coupled updater fixture and old remote/SPS pointer fixtures were corrected; final hosted app/build/bridge/updater/pointer/remote/SPS checks pass. No production expiry, limits or replay policy was relaxed.
+- **Final local delivery:** final package layout passed 232 isolated Unity checks in each color space; 135 panel, 69 updater, 94 remote and 282 SPS checks passed locally. Final Windows package: 1,364 files, 116,025,930 bytes, SHA-256 `513298c34cae016630de8db44f895114f4eb3bd2be2a413dfafb48bc0f9d02ac`. VPM SHA-256 `e89b0b9db71ada711488484cb364250a23f6bd7ccd94d5a4fc5d0acb9ac9ab16`. All 14 real Editor tool files match the local verified source; 9,081 protected Unity files unchanged. No real Editor launch, avatar install, scene save/switch, real peer or physical output.
+- **Remaining owner action:** explicitly Update the avatar with Tools/ShockWave/Panel, save/upload when ready, then test the original failing angles and both hands in the headset. VCC updates tools; existing generated avatars never change automatically. Saved panel size may retain its previous value despite the new fresh 20% default.
+
 ## 2026-10-23 — avatar panel v6, compact menu and VCC package
 
 - **Requested behavior implemented:** the setup window is Tools/ShockWave/Panel with a configurable radial path. The radial contains only Show panel, Follow right hand and Panel size (fresh saved default 20%). Panel starts inactive in Unity preview and on avatar startup. Normal placement follows avatar position/rotation using a captured root constraint source; hand-follow includes wrist rotation. Install/update remains an explicit user action with Undo and preserved old assets/menus.

@@ -6,6 +6,8 @@ First public release: **[ShockWave 0.7.0](https://github.com/Szeb95/ShockWave/re
 
 **0.7.7 update:** automatic SPS now has shared source switches, per-function gears and socket On display, with the pump-selection correction. Connect adds saved friends protected by Windows. Both friends need 0.7.7 or later for saved pairing. See the newest [workstream status](lovense-remote/STATUS.md) entry for package, publication and public-updater verification. Existing preferences and Unity installations are preserved.
 
+**0.7.9 / Avatar Panel 0.1.0 (2026-10-23):** [Windows release](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.9) and [Add to Creator Companion](https://szeb95.github.io/ShockWave/) are public and anonymously checksum-verified. The separate `panel-v0.1.0` release is not latest; Windows v0.7.9 remains the updater target. Source checks and Pages deployment passed. See the latest workstream status for exact evidence and the explicit avatar Update/upload requirement.
+
 ## Current state
 
 The published project includes its homepage with original banner and simulated screenshots, setup/build links, contribution/security guidance, issue/PR templates, third-party notices and a Windows source-check workflow. Repository topics and private vulnerability reporting are enabled.
