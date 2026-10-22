@@ -15,10 +15,11 @@ internal static class Program
         Application.EnableVisualStyles();
         try
         {
-            Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); Panel();
+            if (args.Contains("--log-stress")) LogStress();
+            else { Receiver(); LiveGestureReplacement(); Inventory(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); Panel(); }
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
-            File.WriteAllText(Path.Combine(artifacts, "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
+            File.WriteAllText(Path.Combine(artifacts, args.Contains("--log-stress") ? "log-stress-report.json" : "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet"), PackagedStartup = args.Contains("--package-startup") }));
             Console.WriteLine($"Remote connection: {passed} checks passed"); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); File.WriteAllText(Path.Combine(artifacts,"native-failure.txt"),e.ToString()); return 1; }
@@ -308,6 +309,42 @@ internal static class Program
         sender.Session.Receive("result",Element(fresh with {Reason="private-fixture-marker"}));
         Check(senderLog.All(s=>!s.Contains("private-fixture-marker")),"peer-supplied rejection text is allowlisted rather than copied to logs");
     }
+    private static void LogStress()
+    {
+        using var toys = new LocalToysPage(); using var form = new OverlayForm(new BridgeConfig(),initialSaveConfig:_=>{},initialLocalToys:toys);
+        var flags = BindingFlags.NonPublic|BindingFlags.Instance;
+        var append = typeof(OverlayForm).GetMethod("AppendLog",flags)!;
+        var page = (Control)typeof(OverlayForm).GetField("logsPage",flags)!.GetValue(form)!;
+        var grid = (DataGridView)typeof(OverlayForm).GetField("logGrid",flags)!.GetValue(form)!;
+        const string line = "Network 5s: sent 109, received 108, expired 0, future 0, blocked 0, pipe expired 0, unknown targets 0; max state age 95 ms, gap 64 ms, min remaining 325 ms; max RTT 155 ms, clock uncertainty 83 ms; app gap 47 ms.";
+        for(var i=0;i<500;i++) append.Invoke(form,["remote",line]);
+        using var preview = new Form {Width=790,Height=600,BackColor=Color.FromArgb(30,31,34),ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
+        preview.Controls.Add(page); page.Dock=DockStyle.Fill; page.Visible=true;
+        using var owner = new Fixture(); var toy = owner.Session.PublishInventory().Toys.Single();
+        var frame = new RemoteLevel(toy.Id,toy.Functions[0].Id,65,1);
+        owner.Session.Receive("state",Element(new[]{frame}),330);
+        var lastTick = Environment.TickCount64; long maximumGap=0; var expired=false; var ticks=0;
+        using var timer = new System.Windows.Forms.Timer {Interval=33};
+        timer.Tick += (_,_) => {
+            var now=Environment.TickCount64; maximumGap=Math.Max(maximumGap,now-lastTick); lastTick=now; ticks++;
+            owner.Session.Receive("state",Element(new[]{frame}),330);
+            expired |= owner.Controller.State("fixture","v1").RequestedPercent==0;
+        };
+        timer.Start(); var showAt=Environment.TickCount64; preview.Show(); Application.DoEvents(); var showMs=Environment.TickCount64-showAt;
+        var until=Environment.TickCount64+2500; var nextChange=Environment.TickCount64; var wide=false;
+        while(Environment.TickCount64<until)
+        {
+            if(Environment.TickCount64>=nextChange) {
+                wide=!wide; preview.Width=wide?1050:620; nextChange=Environment.TickCount64+250;
+                append.Invoke(form,["remote",line]);
+            }
+            Application.DoEvents(); Thread.Sleep(5);
+        }
+        timer.Stop(); preview.Hide();
+        File.WriteAllText(Path.Combine(artifacts,"log-performance.json"),JsonSerializer.Serialize(new{showMs,maximumGap,ticks,expired,rows=grid.RowCount,virtualMode=grid.VirtualMode,autoSize=grid.AutoSizeRowsMode.ToString(),PhysicalOutput=false}));
+        Check(!expired && ticks>10 && owner.Controller.State("fixture","v1").RequestedPercent==65,
+            "opening and resizing a full Log view preserves a 330 ms simulated remote input lease");
+    }
     private static void Panel()
     {
         using var toys = new LocalToysPage(); using var form = new OverlayForm(new BridgeConfig(),initialSaveConfig:_=>{},initialLocalToys:toys);
@@ -317,7 +354,8 @@ internal static class Program
         formRemote.ReportHealth(Element(new{sent=12,received=10}));
         var formLog = (List<string>)typeof(OverlayForm).GetField("recentLog",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
         Check(formLog.Any(s=>s.Contains("REMOTE") && s.Contains("Network 5s: sent 12")),"normal app Log page receives remote diagnostics");
-        formLog.Add("00:00:00  OTHER  unrelated-fixture-marker");
+        var appendLog = typeof(OverlayForm).GetMethod("AppendLog",BindingFlags.NonPublic|BindingFlags.Instance)!;
+        appendLog.Invoke(form,["other","unrelated-fixture-marker"]);
         Check(form.RemoteLogText().Contains("Network 5s: sent 12") && form.RemoteLogText().Contains("ShockWave") && !form.RemoteLogText().Contains("unrelated-fixture-marker"),
             "Copy remote log includes version/timing and remote events without unrelated activity");
         var logPage = (Control)typeof(OverlayForm).GetField("logsPage",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
@@ -327,10 +365,17 @@ internal static class Program
         // Host only the page; showing the normal app form would start devices.
         using var logPreview = new Form {Width=620,Height=440,BackColor=Color.FromArgb(30,31,34),ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
         logPreview.Controls.Add(logPage); logPage.Dock=DockStyle.Fill; logPage.Visible=true; logPreview.Show(); Application.DoEvents();
+        var logGrid = (DataGridView)typeof(OverlayForm).GetField("logGrid",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(form)!;
+        Check(logGrid.Rows[0].Cells[1].Value?.ToString()=="REMOTE" && logGrid.Rows[0].Cells[2].Value?.ToString()?.Contains("Network 5s: sent 12")==true,
+            "on-demand Log rows retain their source and full message values");
         Check(logButtons.All(b=>b.Visible && b.Left>=0 && b.Right<=b.Parent!.ClientSize.Width),"copy and clear buttons fit the minimum-width log page");
         using(var logImage=new Bitmap(logPreview.ClientSize.Width,logPreview.ClientSize.Height)) {logPreview.DrawToBitmap(logImage,logPreview.ClientRectangle); logImage.Save(Path.Combine(artifacts,"log-page.png"));}
         logButtons.Single(b=>b.Text=="Clear").PerformClick();
         Check(formLog.Count==0 && !form.RemoteLogText().Contains("Network 5s"),"Clear removes both visible history and the copy buffer");
+        for(var i=0;i<505;i++) appendLog.Invoke(form,["remote","fixture entry "+i+"  full detail"]);
+        Check(logGrid.RowCount==500 && formLog.Count==500 && logGrid.Rows[0].Cells[2].Value?.ToString()=="fixture entry 5  full detail" && logGrid.Rows[499].Cells[2].Value?.ToString()=="fixture entry 504  full detail",
+            "Log rotation stays bounded and preserves full messages including double spaces");
+        logButtons.Single(b=>b.Text=="Clear").PerformClick();
         logPreview.Hide();
         using var f = new Fixture(); using var page = new RemotePage(f.Session,()=>"node.exe",Path.GetFullPath("bridge"));
         using var preview = new Form { Width=1050,Height=870,ShowInTaskbar=false,Location=new(-32000,-32000),StartPosition=FormStartPosition.Manual };

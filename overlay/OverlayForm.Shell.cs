@@ -514,7 +514,7 @@ internal sealed partial class OverlayForm : Form
             catch (Exception error) { AppendLog("error", "Could not copy the log: " + error.Message); }
         };
         clear.FlatAppearance.BorderSize = 0;
-        clear.Click += (_, _) => { recentLog.Clear(); logGrid.Rows.Clear(); };
+        clear.Click += (_, _) => { recentLog.Clear(); logGrid.RowCount = 0; };
         logHeader.Controls.Add(logTitle);
         logHeader.Controls.Add(logSubtitle);
         logHeader.Controls.Add(clear);
@@ -545,7 +545,19 @@ internal sealed partial class OverlayForm : Form
         logGrid.EnableHeadersVisualStyles = false;
         logGrid.ColumnHeadersHeight = 34;
         logGrid.RowTemplate.Height = 30;
-        logGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.AllCells;
+        // Do not measure every stored message on show/resize or each append:
+        // this shares the UI thread with the expiring control timers.
+        logGrid.VirtualMode = true;
+        logGrid.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+        logGrid.CellValueNeeded += (_, args) => args.Value = LogValue(args.RowIndex,args.ColumnIndex);
+        logGrid.CellToolTipTextNeeded += (_, args) => args.ToolTipText = LogValue(args.RowIndex,2);
+        logGrid.CellFormatting += (_, args) =>
+        {
+            if (args.CellStyle is not { } style) return;
+            var error = LogValue(args.RowIndex,1) == "ERROR";
+            if (args.ColumnIndex == 1) style.ForeColor = error ? Warning : Accent;
+            else if (args.ColumnIndex == 2) style.ForeColor = error ? Warning : TextColor;
+        };
         logGrid.ColumnHeadersDefaultCellStyle = new DataGridViewCellStyle
         {
             BackColor = PanelHover, ForeColor = Muted, SelectionBackColor = PanelHover,
@@ -559,7 +571,7 @@ internal sealed partial class OverlayForm : Form
         logGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Time", Width = 92, SortMode = DataGridViewColumnSortMode.NotSortable });
         logGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Source", Width = 78, SortMode = DataGridViewColumnSortMode.NotSortable });
         logGrid.Columns.Add(new DataGridViewTextBoxColumn { HeaderText = "Event", AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill, SortMode = DataGridViewColumnSortMode.NotSortable });
-        logGrid.Columns[2].DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        logGrid.Columns[2].DefaultCellStyle.WrapMode = DataGridViewTriState.False;
         layout.Controls.Add(logGrid, 0, 1);
     }
 
@@ -1208,21 +1220,28 @@ internal sealed partial class OverlayForm : Form
         recentLog.Add(entry);
         while (recentLog.Count > 500) recentLog.RemoveAt(0);
         var fileError = sessionLog?.Append(entry);
-        var nearBottom = logGrid.RowCount == 0;
-        try
+        var visible = logGrid.Visible;
+        var nearBottom = visible && logGrid.RowCount == 0;
+        if (visible) try
         {
             nearBottom = nearBottom || logGrid.FirstDisplayedScrollingRowIndex < 0 ||
                 logGrid.FirstDisplayedScrollingRowIndex + logGrid.DisplayedRowCount(false) >= logGrid.RowCount - 2;
         }
         catch (InvalidOperationException) { nearBottom = true; }
-        var index = logGrid.Rows.Add(time, source.ToUpperInvariant(), message);
-        logGrid.Rows[index].Cells[1].Style.ForeColor = source == "error" ? Warning : Accent;
-        logGrid.Rows[index].Cells[2].Style.ForeColor = source == "error" ? Warning : TextColor;
-        logGrid.Rows[index].Cells[2].ToolTipText = message;
-        while (logGrid.Rows.Count > 500) logGrid.Rows.RemoveAt(0);
-        if (nearBottom && logGrid.Rows.Count > 0)
-            TryScrollLog(logGrid.Rows.Count - 1);
+        if (logGrid.RowCount != recentLog.Count) logGrid.RowCount = recentLog.Count;
+        if (visible)
+        {
+            logGrid.Invalidate();
+            if (nearBottom && logGrid.RowCount > 0) TryScrollLog(logGrid.RowCount - 1);
+        }
         if (fileError is not null) AppendLog("error", fileError);
+    }
+
+    private string LogValue(int row, int column)
+    {
+        if (row < 0 || row >= recentLog.Count || column is < 0 or > 2) return "";
+        var parts = recentLog[row].Split(["  "],3,StringSplitOptions.None);
+        return column < parts.Length ? parts[column] : "";
     }
 
     private void TryScrollLog(int index)

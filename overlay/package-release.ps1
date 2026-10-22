@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.7.5',
+    [string]$Version = '0.7.6',
     [string]$OutputDirectory = '',
     [string[]]$PublishArguments = @()
 )
