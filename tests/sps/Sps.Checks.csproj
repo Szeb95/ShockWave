@@ -3,5 +3,5 @@
     <OutputType>Exe</OutputType><TargetFramework>net8.0-windows</TargetFramework><UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable><AssemblyName>Sps.Checks</AssemblyName><RuntimeIdentifier>win-x64</RuntimeIdentifier>
   </PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../overlay/ShockWave.Overlay.csproj" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../../overlay/ShockWave.Overlay.csproj" /><Compile Include="../toy-control/PoseInput.cs" Link="PoseInput.cs" /></ItemGroup>
 </Project>

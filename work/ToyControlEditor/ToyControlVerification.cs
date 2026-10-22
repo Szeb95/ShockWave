@@ -72,7 +72,7 @@ namespace ShockWave.ToyControl
                 Check(entries.Length==1 && (string)entries[0].GetType().GetField("prefix",flags).GetValue(entries[0])=="Utilities/ShockWave","Chosen nested radial path is passed to VRCFury without replacing existing menus");
                 Check(originalChild!=null && avatar.expressionParameters==null && avatar.expressionsMenu==null,"Installer preserves existing avatar children and descriptor assets");
                 Check(host.GetComponents<Component>().Any(c=>c!=null && c.GetType().FullName=="VF.Model.VRCFury"),"VRCFury Full Controller attached");
-
+                
                 Check(ToyControlSetupWindow.ValidateAvatar(avatar)!=null,"Duplicate install refused");
                 var parameters=AssetDatabase.LoadAssetAtPath<VRCExpressionParameters>(folder+"/Parameters.asset");
                 Check(parameters.parameters.Length==616 && parameters.parameters.All(p=>p.saved==(p.name==ToyControlContract.Prefix+"Size") && !p.networkSynced && p.defaultValue==(p.name==ToyControlContract.Prefix+"Size" ? 0.2f : 0)),"616 local parameters; only size is saved, confirmation is never saved");
@@ -299,7 +299,9 @@ namespace ShockWave.ToyControl
                 check(dimensions.y<=40/1240f*.74f+.00001f && dimensions.z<=.0081f,"Inset row contact has a vertical dead zone and shallower depth: "+r.name);
             }
             void Step(){for(var i=0;i<8;i++) animator.Update(.02f);}
-            animator.SetBool(ToyControlContract.Prefix+"InputReady",true);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);
+            check(controller.layers[3].stateMachine.states.All(s=>s.state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters).Any(p=>p.name==ToyControlContract.Prefix+"AppReady" && p.value==(s.state.name.StartsWith("App pulse") ? 1 : 0))),"Existing backend freshness states explicitly gate pointer availability");
+            // VRChat executes these drivers; scratch Animator evaluation supplies their result.
+            animator.SetBool(ToyControlContract.Prefix+"AppReady",true);animator.SetBool(ToyControlContract.Prefix+"InputReady",true);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);
             animator.SetInteger("GestureLeft",7);animator.SetInteger("GestureRight",7);Step();
             check(pointer.gameObject.activeSelf && tracking.gameObject.activeSelf && !contacts.Find("InTouch").gameObject.activeSelf,"Pointer mode enables pose sensors and disables physical finger selection");
             foreach(var hand in new[]{"L","R"})
@@ -326,6 +328,8 @@ namespace ShockWave.ToyControl
                 animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid",0);Step();check(!marker.enabled && !beam.enabled,hand+" invalid/outside/grazing pointer hides both visuals");
             }
             VerifyPoseCoordinates(host,check);
+            animator.SetBool(ToyControlContract.Prefix+"AppReady",false);Step();check(!pointer.gameObject.activeSelf && !tracking.gameObject.activeSelf && pointer.GetComponentsInChildren<SkinnedMeshRenderer>(true).All(r=>!r.enabled),"App freshness loss hides the last pointer and disables tracking");
+            animator.SetBool(ToyControlContract.Prefix+"AppReady",true);Step();check(pointer.gameObject.activeSelf,"A fresh app heartbeat can restore aiming with release-before-click");
             animator.SetBool(ToyControlContract.Prefix+"InputReady",false);Step();check(!pointer.gameObject.activeSelf && !tracking.gameObject.activeSelf,"Placement guard disables pointer tracking and requires a fresh click");
             animator.SetBool(ToyControlContract.Prefix+"InputReady",true);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0);Step();check(contacts.Find("InTouch").gameObject.activeSelf && !tracking.gameObject.activeSelf,"Touch mode restores finger controls without a scene collider");
             VerifyBeamRender(pointer.Find("L/Beam").GetComponent<SkinnedMeshRenderer>(),output,check);

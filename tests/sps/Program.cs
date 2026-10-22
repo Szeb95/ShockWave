@@ -157,7 +157,7 @@ internal static class Program
             void PumpFor(int milliseconds)
             { var until=Environment.TickCount64+milliseconds; do { Tick(); Thread.Sleep(10); } while(Environment.TickCount64<until); }
             void Aim(float x,float y)
-            { Input("InPointerLX",x/1240); Input("InPointerLY",1-(y-100)/608); Input("InPointerLHit",true); }
+            { PoseInput.Aim(Input,"L",x,y); }
             void Draw(float level)
             {
                 if(mode=="Desktop") graph.Draw(new(600,PanelLayout.Graph.Y+PanelLayout.Graph.Height*(1-level)),false);

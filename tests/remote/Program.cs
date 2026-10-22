@@ -277,7 +277,7 @@ internal static partial class Program
         Vrc("InTouch",false); graph.Tick(ToyOscRouter.Clock); Vrc("InTouch",true); graph.Tick(ToyOscRouter.Clock);
         Check(sender.Session.Toys.Levels().Single().Claim>vr.Claim,"fresh avatar touch resumes without selecting the row again");
         Vrc("InTouch",false); graph.Tick(ToyOscRouter.Clock); graph.Action("InInputMode",false);
-        Vrc("InPointerLHit",true); Vrc("InPointerLX",.5f); Vrc("InPointerLY",.6f); Vrc("InPointerLPress",true); graph.Tick(ToyOscRouter.Clock);
+        PoseInput.Aim(Vrc,"L",620,343.2f); Vrc("InPointerLPress",true); graph.Tick(ToyOscRouter.Clock);
         var pointer = sender.Session.Toys.Levels().Single();
         sender.Session.Toys.Reject(pointer.Device,pointer.Channel,pointer.Claim); graph.Tick(ToyOscRouter.Clock); graph.Tick(ToyOscRouter.Clock);
         Check(graph.Model.Functions.First().Selected && sender.Session.Toys.Levels().Length==0,

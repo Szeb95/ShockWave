@@ -207,6 +207,7 @@ namespace ShockWave.ToyControl
             c.AddParameter("GestureLeft",AnimatorControllerParameterType.Int); c.AddParameter("GestureRight",AnimatorControllerParameterType.Int);
             c.AddParameter(ToyControlContract.Prefix+"RxBeat",AnimatorControllerParameterType.Bool); c.AddParameter("IsLocal",AnimatorControllerParameterType.Bool);
             c.AddParameter(ToyControlContract.Prefix+"InputReady",AnimatorControllerParameterType.Bool);
+            c.AddParameter(ToyControlContract.Prefix+"AppReady",AnimatorControllerParameterType.Bool);
             var weightName=ToyControlContract.Prefix+"Weight"; c.AddParameter(new AnimatorControllerParameter {name=weightName,type=AnimatorControllerParameterType.Float,defaultFloat=1});
             foreach(var name in ToyControlContract.FeedbackFields()) c.AddParameter(ToyControlContract.ReceivePrefix+name,AnimatorControllerParameterType.Float);
             var layers=c.layers; layers[0].name="Shader feedback"; layers[0].defaultWeight=1; c.layers=layers;
@@ -269,6 +270,8 @@ namespace ShockWave.ToyControl
             // Offline must not immediately re-enter the same stale bit: separate
             // wait states remember which pulse expired, then require its opposite.
             var waitA=State(watch,"Expired A",Material(c,"Expired A","_LinkOnline",0,0.1f)); var waitB=State(watch,"Expired B",Material(c,"Expired B","_LinkOnline",0,0.1f));
+            foreach(var state in new[] {offline,waitA,waitB}) Driver(state,"AppReady",0);
+            foreach(var state in new[] {onA,onB}) Driver(state,"AppReady",1);
             foreach(var s in new[] {onA,onB}) foreach(var t in s.transitions.Where(t=>t.destinationState==offline).ToArray()) s.RemoveTransition(t);
             var ta=Transition(onA,waitA); ta.hasExitTime=true; ta.exitTime=1; var tb=Transition(onB,waitB); tb.hasExitTime=true; tb.exitTime=1;
             Bool(Transition(waitA,onB),"RxBeat",false); Bool(Transition(waitB,onA),"RxBeat",true);

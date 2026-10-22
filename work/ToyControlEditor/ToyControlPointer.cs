@@ -91,7 +91,7 @@ namespace ShockWave.ToyControl
                 if(name=="InTouch" || name=="InPanelTouch" || name=="InPage" || name.StartsWith("InRow",StringComparison.Ordinal) || name=="InRecord" || name=="InPlay" || name=="InClear" || name=="InStop" || name=="InPrev" || name=="InNext")
                 {Curve((AnimationClip)off.motion,"Panel/Size/Contacts/"+name,typeof(GameObject),"m_IsActive",1);Curve((AnimationClip)on.motion,"Panel/Size/Contacts/"+name,typeof(GameObject),"m_IsActive",0);}
             PointerReady(Transition(off,on));
-            foreach(var suffix in new[] {"Visible","InputReady"}) Bool(Transition(on,off),suffix,false);
+            foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(on,off),suffix,false);
             Transition(on,off).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(on,off).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");
             foreach(var hand in new[] {"L","R"})
             {
@@ -100,7 +100,7 @@ namespace ShockWave.ToyControl
                 Driver(inactive,"InPointer"+hand+"Press",0);Driver(ready,"InPointer"+hand+"Press",0);Driver(down,"InPointer"+hand+"Press",1);
                 var gesture=hand=="L" ? "GestureLeft" : "GestureRight";var arm=Transition(inactive,ready);PointerReady(arm);arm.AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
                 foreach(var state in new[] {ready,down})
-                {foreach(var suffix in new[] {"Visible","InputReady"}) Bool(Transition(state,inactive),suffix,false);Transition(state,inactive).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,inactive).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");}
+                {foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(state,inactive),suffix,false);Transition(state,inactive).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,inactive).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");}
                 Transition(ready,down).AddCondition(AnimatorConditionMode.Equals,7,gesture);Transition(down,ready).AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
             }
             foreach(var hand in new[] {"L","R"})
@@ -110,7 +110,7 @@ namespace ShockWave.ToyControl
                 Curve((AnimationClip)hidden.motion,marker,typeof(MeshRenderer),"m_Enabled",0);Curve((AnimationClip)shown.motion,marker,typeof(MeshRenderer),"m_Enabled",1);
                 Curve((AnimationClip)hidden.motion,"Pointer/"+hand+"/Beam",typeof(SkinnedMeshRenderer),"m_Enabled",0);Curve((AnimationClip)shown.motion,"Pointer/"+hand+"/Beam",typeof(SkinnedMeshRenderer),"m_Enabled",1);
                 var show=Transition(hidden,shown);PointerReady(show);show.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid");
-                foreach(var suffix in new[] {"Visible","InputReady"}) Bool(Transition(shown,hidden),suffix,false);
+                foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(shown,hidden),suffix,false);
                 Transition(shown,hidden).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid");
             }
         }
@@ -145,7 +145,7 @@ namespace ShockWave.ToyControl
             foreach(var suffix in new[] {"Visible","InputReady"}) Bool(Transition(on,off),suffix,false);Transition(on,off).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(on,off).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"ShockerPage");
         }
         private static void PointerReady(AnimatorStateTransition t)
-        {Bool(t,"Visible",true);Bool(t,"InputReady",true);t.AddCondition(AnimatorConditionMode.If,0,"IsLocal");t.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer");}
+        {Bool(t,"Visible",true);Bool(t,"InputReady",true);Bool(t,"AppReady",true);t.AddCondition(AnimatorConditionMode.If,0,"IsLocal");t.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer");}
     }
 }
 #endif
