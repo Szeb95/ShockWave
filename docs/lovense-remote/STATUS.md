@@ -2,6 +2,13 @@
 
 Updated: 2026-10-23.
 
+## 2026-10-23 — VCC 0.1.3 gesture guide published and verified
+
+- Published [Avatar Panel 0.1.3](https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.3), source `e0218fec4147b7ebc341fcf574ff7a8e7bf08ab0`, with latest disabled. [Source checks](https://github.com/Szeb95/ShockWave/actions/runs/39884827168) and [listing deployment](https://github.com/Szeb95/ShockWave/actions/runs/39884827129) succeeded. Anonymous listing/download checks confirm SHA-256 `31c94464332965b58d774bb6031dd49ab8e1f4a02d95580bc4bce6c1bf968438`, 31 files and the correct embedded version; earlier versions are preserved and Windows v0.7.10 remains latest.
+- Final toy/pointer and shocker screenshots were visually inspected: the compact gesture guide fits the bottom of both pages, and the relocated shocker connection label does not overlap. All 217 existing scratch Unity checks pass in Gamma with the exact final package files; no new behavior tests were added for this text/layout edit. No geometry/material/parameter/input changes. Evidence: work/panel-gesture-help-checks/public/verification.json and isolated panel-gesture-help-gamma captures/report.
+- Owner action: update the VCC package, explicitly Update Toy Control on Avatar through Tools/ShockWave/Panel, then save/upload when ready. Existing app 0.7.10 works without an EXE rebuild. No real Unity project action, normal app or settings change, or device command occurred. Headset font readability remains owner feedback; prior handling behavior is preserved.
+
+
 ## 2026-10-23 — compact avatar gesture guide prepared (VCC 0.1.3)
 
 - Added the owner's requested bottom guide to both avatar pages: Fist = grab handle | Finger gun = point | Curl index (thumbs up) = click. It uses small muted text baked into the existing label textures. The shocker connection label moves below the sliders and above the guide to avoid overlap. No new geometry, materials, parameters, hit targets, gesture/control behavior or app/protocol changes; existing app 0.7.10 remains compatible.
