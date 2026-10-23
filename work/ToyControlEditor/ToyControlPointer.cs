@@ -79,7 +79,7 @@ namespace ShockWave.ToyControl
         {
             foreach(var entry in c.layers[1].stateMachine.states)
             {
-                var ready=entry.state.name=="Place beside right hand" || entry.state.name=="Dropped" || entry.state.name=="Follow right hand" || entry.state.name=="Follow back of right hand" || entry.state.name=="Follow avatar";
+                var ready=PlacementAcceptsInput(entry.state.name);
                 Driver(entry.state,"InputReady",ready ? 1 : 0);
                 if(!ready) foreach(var name in new[] {"InPointerLPress","InPointerRPress","InPointerReady","InInputMode","InPanelTouch","InPage"}) Driver(entry.state,name,0);
             }
@@ -98,9 +98,9 @@ namespace ShockWave.ToyControl
                 var sm=Layer(c,"Pointer "+hand+" click");var inactive=State(sm,"Release before pointing",Clip(c,"Pointer "+hand+" idle",.1f));sm.defaultState=inactive;
                 var ready=State(sm,"Aim",Clip(c,"Pointer "+hand+" aim",.1f));var down=State(sm,"Click / draw",Clip(c,"Pointer "+hand+" press",.1f));
                 Driver(inactive,"InPointer"+hand+"Press",0);Driver(ready,"InPointer"+hand+"Press",0);Driver(down,"InPointer"+hand+"Press",1);
-                var gesture=hand=="L" ? "GestureLeft" : "GestureRight";var arm=Transition(inactive,ready);PointerReady(arm);arm.AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
+                var gesture=hand=="L" ? "GestureLeft" : "GestureRight";var arm=Transition(inactive,ready);PointerReady(arm,hand);arm.AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
                 foreach(var state in new[] {ready,down})
-                {foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(state,inactive),suffix,false);Transition(state,inactive).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,inactive).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");}
+                {foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(state,inactive),suffix,false);Transition(state,inactive).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,inactive).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");Transition(state,inactive).AddCondition(AnimatorConditionMode.Equals,hand=="L" ? 1 : 2,ToyControlContract.Prefix+"HoldingHand");}
                 Transition(ready,down).AddCondition(AnimatorConditionMode.Equals,7,gesture);Transition(down,ready).AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
             }
             foreach(var hand in new[] {"L","R"})
@@ -109,9 +109,9 @@ namespace ShockWave.ToyControl
                 var marker="Panel/Size/Contacts/PointerHits/"+hand+"/Marker";
                 Curve((AnimationClip)hidden.motion,marker,typeof(MeshRenderer),"m_Enabled",0);Curve((AnimationClip)shown.motion,marker,typeof(MeshRenderer),"m_Enabled",1);
                 Curve((AnimationClip)hidden.motion,"Pointer/"+hand+"/Beam",typeof(SkinnedMeshRenderer),"m_Enabled",0);Curve((AnimationClip)shown.motion,"Pointer/"+hand+"/Beam",typeof(SkinnedMeshRenderer),"m_Enabled",1);
-                var show=Transition(hidden,shown);PointerReady(show);show.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid");
+                var show=Transition(hidden,shown);PointerReady(show,hand);show.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid");
                 foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(shown,hidden),suffix,false);
-                Transition(shown,hidden).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid");
+                Transition(shown,hidden).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid");Transition(shown,hidden).AddCondition(AnimatorConditionMode.Equals,hand=="L" ? 1 : 2,ToyControlContract.Prefix+"HoldingHand");
             }
         }
         private static void PointerPositionLayer(AnimatorController c)
@@ -151,8 +151,8 @@ namespace ShockWave.ToyControl
             }
             foreach(var pair in new[] {(on,pulse),(pulse,on)}) {var t=Transition(pair.Item1,pair.Item2);t.hasExitTime=true;t.exitTime=1;}
         }
-        private static void PointerReady(AnimatorStateTransition t)
-        {Bool(t,"Visible",true);Bool(t,"InputReady",true);Bool(t,"AppReady",true);t.AddCondition(AnimatorConditionMode.If,0,"IsLocal");t.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer");}
+        private static void PointerReady(AnimatorStateTransition t,string hand=null)
+        {Bool(t,"Visible",true);Bool(t,"InputReady",true);Bool(t,"AppReady",true);t.AddCondition(AnimatorConditionMode.If,0,"IsLocal");t.AddCondition(AnimatorConditionMode.Greater,.5f,ToyControlContract.ReceivePrefix+"Pointer");if(hand!=null) t.AddCondition(AnimatorConditionMode.NotEqual,hand=="L" ? 1 : 2,ToyControlContract.Prefix+"HoldingHand");}
     }
 }
 #endif

@@ -55,6 +55,8 @@ These are software-test previews with simulated devices and empty connection cod
 
 Keep the Unity tools updated through VCC. In Unity open **Tools → ShockWave → Panel**, choose the radial menu path and explicitly add/update your avatar. The panel starts hidden; its menu contains **Show panel**, **In right hand**, **Back of right hand** and **Panel size** (default 20%). Upload again after updating avatar content. Use Windows app **0.7.10 or later** for the new pointer.
 
+With both hand modes off, the panel stays fixed in the world. Fist-grab a handle in Touch or Pointer mode and draw with the free hand. You can refit a right-hand attachment in VR using the left hand, or select a hand mode while gripping and release to attach at that position. Fits last while the avatar remains loaded; the setup guide explains permanent Editor captures.
+
 ## Getting started
 
 **Requirements:** Windows 10 version 1809 or newer, or Windows 11, on an x64 PC. Bluetooth control requires a compatible Windows Bluetooth adapter and supported toy. OpenShock and PiShock require their own hardware and account credentials. VRChat features require VRChat with OSC enabled.

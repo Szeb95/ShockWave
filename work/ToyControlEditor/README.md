@@ -21,7 +21,7 @@ The panel is **off by default in Unity preview and VRChat**. The radial menu con
 - **Back of right hand**
 - **Panel size** — saved locally, fresh default **20%**
 
-The two hand toggles use one local mode value and are mutually exclusive. Both off follows the avatar root's movement and turns, including stick turns, without following the tracked head's pitch/roll. This is the closest avatar-only match to stick turning: VRChat exposes angular velocity, not a separate “this turn came from the joystick” flag. It is not a promise to distinguish every physical/body turn from locomotion.
+The two hand toggles use one local mode value and are mutually exclusive. **Both off locks the panel in the world.** Looking around, walking, stick movement and stick turns leave it where you placed it. Hide/show brings it back beside the right hand. This is world locking; it does not use the camera's playspace-following behavior.
 
 Both hand modes follow wrist position and rotation. Automatic alignment uses the extended index direction and index/little-finger side, avoiding arbitrary hand-bone axes. In hand holds the board beside the hand; Back of hand puts it above the back surface. Exact offsets can vary by avatar and controller grip.
 
@@ -34,7 +34,19 @@ Both hand modes follow wrist position and rotation. Automatic alignment uses the
 
 Capture reads the actual visible Panel transform relative to the right wrist; it does not move objects or save the scene. Whole-host Transform values in screenshots cannot define a portable hand offset without that hand's pose. The captured values are saved as `Placement.json` in the new generated content folder during Update and retained on later updates. **Load saved placements from avatar** restores them in the window; **Use automatic placements** clears them for the next explicit Update.
 
-Only a **Fist** at a floating strip in **Touch** mode can grab the floating panel. Pistol aiming and Thumbs Up never grab. Pointer mode and attached hand presets ignore grip contacts, preventing the panel from grabbing its own hand and disabling input. Releasing a grab retains the existing touch guard before body following resumes.
+### Handles and fitting the panel in VR
+
+A **Fist** on either handle grabs a floating panel in **Touch or Pointer** mode. Hold with either hand and draw with the free hand. The gripping hand's pointer and click are suppressed; pistol aiming and Thumbs Up do not grab. The short attach/drop guards require fresh input after repositioning.
+
+To adjust a right-hand attachment, grab a handle with the **left hand**, move/rotate the panel and release. It returns to the right wrist using the new offset. The mounted right wrist ignores its own grip contacts.
+
+To create a hand fit on the fly:
+
+1. Grab a floating panel with a fist.
+2. While holding, select **In right hand** or **Back of right hand** in the radial menu. It keeps following the grip while held.
+3. Position it how you want relative to the right hand, then release the fist. It attaches there without jumping to the preset.
+
+Both hand modes remember their adjusted offsets separately while this avatar remains loaded, including hide/show and toggling a mode off/on. These in-game adjustments reset on avatar reload; they do not edit the Unity avatar or persist to disk. Use the Editor capture procedure above for a permanent uploaded default. With both hand modes off, releasing the handle returns to world lock after the touch guard.
 
 Existing saved Size can override the new default. Size maps 0–100% to 0.4–1.6 times the 74 cm base width; 20% is about 47 cm wide, excluding strips.
 

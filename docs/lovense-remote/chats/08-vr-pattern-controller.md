@@ -1,5 +1,9 @@
 # 08 VR pattern controller
 
+## World lock, usable handles and in-game fitting — VCC 0.1.2
+
+The owner chose world locking whenever no hand mode is selected. Remove root-following rather than approximating the camera's playspace anchor. Restore intentional Fist grabs in Pointer mode, allow free-hand drawing after the attach guard, suppress the gripping/mounted hand's own pointer, and keep pistol/Thumbs Up excluded from grips. The right wrist ignores self-grips, while the free left hand can adjust an attached panel. Releasing rebakes the visible pose into a separate wrist source for each hand mode. A mode selected while holding takes effect on release, allowing an in-game right-hand fit. The two fits survive mode toggles/hide-show for the loaded avatar, but reset on reload; permanent defaults still use Editor capture/Update/upload. No new radial controls or app/OSC contract fields are needed. Existing app 0.7.10 remains compatible; update only the VCC tools and explicit avatar content. STATUS records actual checks/publication and remaining physical verification.
+
 ## Avatar panel v7 / hand placements and shocker pointer — 2026-10-23
 
 The owner requested In right hand and Back of right hand radial presets, avatar-root turning and hidden unknown battery. Two screenshots show adjusted whole-host transforms; those cannot portably define wrist offsets. Tools/ShockWave/Panel now captures the actual visible panel relative to the live humanoid right wrist without moving/saving a scene. Captures survive explicit Update in Placement.json and are preserved by later updates. Automatic alignment uses index/little-finger geometry and follows full wrist rotation. One local unsaved HandMode Int makes the two presets exclusive; both off follows root motion/rotation without tracked head pitch/roll. Strict joystick-source discrimination is not claimed.

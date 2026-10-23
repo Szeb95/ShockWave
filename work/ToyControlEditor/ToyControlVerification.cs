@@ -30,6 +30,11 @@ namespace ShockWave.ToyControl
                 var data=new SerializedObject(component); var property=data.GetIterator();
                 while(property.Next(true)) output.AppendLine(property.propertyPath+" : "+property.propertyType);
                 foreach(var binding in AnimationUtility.GetAnimatableBindings(root,root)) if(binding.type==typeof(VRCParentConstraint)) output.AppendLine("ANIM "+binding.propertyName);
+                var flags=System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance|System.Reflection.BindingFlags.Static;
+                foreach(var type in new[]{typeof(VRCParentConstraint).Assembly,typeof(VRCConstraintBase).Assembly}.Distinct().SelectMany(a=>a.GetTypes()).Where(t=>t.Name.Contains("Constraint"))) {
+                    output.AppendLine("TYPE "+type.FullName);
+                    foreach(var method in type.GetMethods(flags).Where(m=>m.DeclaringType==type)) output.AppendLine(method.ToString());
+                }
                 File.WriteAllText(Path.Combine(Environment.GetEnvironmentVariable("SHOCKWAVE_VR_CHECKS"),"sdk-fields.txt"),output.ToString());
             }
             finally {UnityEngine.Object.DestroyImmediate(root);}
@@ -46,6 +51,7 @@ namespace ShockWave.ToyControl
             {
                 if(string.IsNullOrWhiteSpace(output) || !Path.IsPathRooted(output)) throw new InvalidOperationException("SHOCKWAVE_VR_CHECKS needs an absolute artifact folder.");
                 Directory.CreateDirectory(output);
+                if(Environment.GetEnvironmentVariable("SHOCKWAVE_VR_INSPECT")=="1") InspectSdk();
                 void Check(bool ok,string label) {if(!ok) throw new InvalidOperationException(label); passed++; Debug.Log("VR DEMO PASS "+label);}
                 var requestedColor=Environment.GetEnvironmentVariable("SHOCKWAVE_VR_COLORSPACE");
                 if(!string.IsNullOrWhiteSpace(requestedColor)) Check(QualitySettings.activeColorSpace.ToString()==requestedColor,"Expected active project color space: "+requestedColor);
@@ -53,6 +59,7 @@ namespace ShockWave.ToyControl
                 Check(frame.version==ToyControlContract.Version && frame.values.Length==ToyControlContract.FeedbackFields().Length,"Host feedback fixture matches the shared contract");
                 root=new GameObject("VR_Demo_Verification"); SceneManager.MoveGameObjectToScene(root,scene);
                 var avatar=root.AddComponent<VRCAvatarDescriptor>(); avatar.ViewPosition=new Vector3(0,1.6f,0);
+                VerifyConstraintRuntime(root.transform,Check);
                 avatar.baseAnimationLayers=Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>(); avatar.specialAnimationLayers=Array.Empty<VRCAvatarDescriptor.CustomAnimLayer>();
                 var originalChild=new GameObject("Keep existing avatar object"); originalChild.transform.SetParent(root.transform,false);
                 var leftHand=new GameObject("Synthetic left hand"); leftHand.transform.SetParent(root.transform,false); leftHand.transform.localPosition=new Vector3(-0.35f,1.1f,0);
@@ -94,7 +101,7 @@ namespace ShockWave.ToyControl
                 var clearWidth=new SerializedObject(clearContact).FindProperty("size").vector3Value.x; var stopWidth=new SerializedObject(stopContact).FindProperty("size").vector3Value.x;
                 Check(stopContact.position.x-clearContact.position.x-(clearWidth+stopWidth)/2>0.010f,"Inset button touch zones provide a physical gap between Clear and Stop");
                 var placement=panel.GetComponent<VRCParentConstraint>();
-                Check(placement.Sources.Count==5 && placement.Sources[1].SourceTransform==leftHand.transform && placement.Sources[2].SourceTransform==rightHand.transform,"Spawn and both real hand sources are wired without changing the avatar rig");
+                Check(placement.Sources.Count==6 && placement.Sources[1].SourceTransform==leftHand.transform && placement.Sources[2].SourceTransform==rightHand.transform && placement.Sources.All(s=>s.SourceTransform!=root.transform),"Hand sources and independent runtime fits have no avatar-root follow source");
                 Check(Vector3.Distance(panel.position,host.transform.Find("HandAnchors/RightHandPosition/SpawnRight").position)<0.0001f && Vector3.Dot(panel.forward,(rightTip.transform.position-rightIndex.transform.position).normalized)>.999f,"Default in-hand alignment follows the actual extended-finger axes");
                 Check(Vector3.Dot(panel.up,(rightIndex.transform.position-rightLittle.transform.position).normalized)>.999f,"In-hand up follows the index/thumb side rather than the hand's back, preventing a quarter-turn roll");
                 var backAnchor=host.transform.Find("HandAnchors/RightHandPosition/BackRight");
@@ -112,7 +119,7 @@ namespace ShockWave.ToyControl
                 Check(Mathf.Abs(panel.Find("Size/Board").localScale.y-ToyControlSetupWindow.BoardWidth*608/1240)<0.0001f,"VR board excludes the desktop footer");
                 var controller=AssetDatabase.LoadAssetAtPath<AnimatorController>(folder+"/FX.controller");
                 Check(controller.layers.Length==13 && controller.layers.All(l=>l.defaultWeight==1),"Existing layers plus pointer controls and explicit shocker-view acknowledgement");
-                Check(controller.layers[1].stateMachine.states.Where(s=>s.state.name.Contains("grab") || s.state.name.Contains("Grab")).All(s=>s.state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters).Any(p=>p.name==ToyControlContract.Prefix+"InTouch" && p.value==0)),"Every grab entry explicitly clears touch as well as disabling drawing receivers");
+                Check(controller.layers[1].stateMachine.states.Where(s=>s.state.name.StartsWith("Prepare")).All(s=>s.state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters).Any(p=>p.name==ToyControlContract.Prefix+"InTouch" && p.value==0)),"Every grip/fit preparation clears touch before the stable held input state");
                 var tree=(BlendTree)controller.layers[0].stateMachine.defaultState.motion;
                 Check(tree.children.Length==ToyControlContract.FeedbackFields().Length && tree.children.All(t=>t.directBlendParameter==ToyControlContract.Prefix+"Weight"),"All numeric material properties have independent weighted bindings");
                 foreach(var clip in controller.animationClips.Distinct()) foreach(var binding in AnimationUtility.GetCurveBindings(clip))
@@ -127,35 +134,14 @@ namespace ShockWave.ToyControl
                 foreach(var item in frame.values) animator.SetFloat(ToyControlContract.ReceivePrefix+item.name,item.value);
                 animator.SetBool(ToyControlContract.Prefix+"RxBeat",true);
                 for(var i=0;i<20;i++) animator.Update(0.02f);
-                Check(panel.gameObject.activeSelf && !panel.GetComponent<VRCParentConstraint>().FreezeToWorld && Mathf.Abs(panel.GetComponent<VRCParentConstraint>().Sources[3].Weight-1)<.001f,"Show follows avatar; freeze="+panel.GetComponent<VRCParentConstraint>().FreezeToWorld+" rootWeight="+panel.GetComponent<VRCParentConstraint>().Sources[3].Weight+" state="+animator.GetCurrentAnimatorStateInfo(1).fullPathHash);
-                VerifyPlacements(host,animator,root.transform,rightHand.transform,Check);
+                Check(panel.gameObject.activeSelf && panel.GetComponent<VRCParentConstraint>().FreezeToWorld,"Show places then world-locks the panel without avatar/head following");
                 var size=panel.Find("Size");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0); for(var i=0;i<5;i++) animator.Update(0.02f);
                 Check(Mathf.Abs(size.localScale.x-0.4f)<0.0001f && size.Find("Contacts").parent==size && size.Find("Grips").parent==size,"Minimum radial size scales Board, touch and grips as one child while placement stays frozen");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",1); for(var i=0;i<5;i++) animator.Update(0.02f);
-                Check(Mathf.Abs(size.localScale.x-1.6f)<0.0001f && !placement.FreezeToWorld,"Maximum radial size does not unfreeze a dropped panel");
+                Check(Mathf.Abs(size.localScale.x-1.6f)<0.0001f && placement.FreezeToWorld,"Maximum radial size does not unfreeze a dropped panel");
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0.5f); for(var i=0;i<5;i++) animator.Update(0.02f);
-                animator.SetBool(ToyControlContract.Prefix+"GrabLLeft",true); animator.SetInteger("GestureLeft",2); for(var i=0;i<10;i++) animator.Update(0.02f);
-                Check(!placement.FreezeToWorld && size.Find("Contacts").gameObject.activeSelf,"An unsupported open-hand gesture at the strip cannot grab");
-                animator.SetBool(ToyControlContract.Prefix+"GrabLLeft",false); animator.SetInteger("GestureLeft",0);
-                foreach(var hand in new[] {"L","R"}) foreach(var edge in new[] {"Left","Right"}) foreach(var pose in ToyControlSetupWindow.GrabGestures)
-                {
-                    var gesture=hand=="L" ? "GestureLeft" : "GestureRight"; var source=hand=="L" ? 1 : 2;
-                    animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+edge,true); animator.SetInteger(gesture,pose);
-                    animator.Update(0.01f);
-                    Check(placement.FreezeToWorld && placement.RebakeOffsetsWhenUnfrozen && Mathf.Abs(placement.Sources[source].Weight-1)<0.001f,"Prepare rebaked "+hand+" grab at "+edge+" edge before unfreezing");
-                    for(var i=0;i<12;i++) animator.Update(0.02f);
-                    Check(!placement.FreezeToWorld && placement.RebakeOffsetsWhenUnfrozen && !size.Find("Contacts").gameObject.activeSelf,"Hold follows "+hand+" hand with drawing contacts disabled at "+edge+" edge");
-                    foreach(var other in ToyControlSetupWindow.GrabGestures)
-                    {
-                        animator.SetInteger(gesture,other); for(var i=0;i<5;i++) animator.Update(0.02f);
-                        Check(!placement.FreezeToWorld && !size.Find("Contacts").gameObject.activeSelf,"Switch from pose "+pose+" to "+other+" keeps "+hand+" grab at "+edge+" strip");
-                    }
-                    animator.SetInteger(gesture,0); for(var i=0;i<15;i++) animator.Update(0.02f);
-                    Check(placement.FreezeToWorld && !size.Find("Contacts").gameObject.activeSelf,"Release guards touch while "+hand+" hand remains at the "+edge+" strip");
-                    animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+edge,false); for(var i=0;i<15;i++) animator.Update(0.02f);
-                    Check(!placement.FreezeToWorld && size.Find("Contacts").gameObject.activeSelf,"Leaving the "+edge+" strip restores touch after dropping with "+hand+" hand");
-                }
+                VerifyPlacements(host,animator,root.transform,rightHand.transform,Check);
                 animator.SetFloat(ToyControlContract.Prefix+"Size",0.73f); animator.SetBool(ToyControlContract.Prefix+"InStop",true); animator.SetBool(ToyControlContract.Prefix+"Visible",false); for(var i=0;i<5;i++) animator.Update(0.02f);
                 animator.SetBool(ToyControlContract.Prefix+"Visible",true); animator.SetBool(ToyControlContract.Prefix+"InStop",false); for(var i=0;i<20;i++) animator.Update(0.02f);
                 Check(Mathf.Abs(size.localScale.x-(0.4f+1.2f*0.73f))<0.0001f && animator.GetFloat(ToyControlContract.Prefix+"Size")==0.73f,"Stop and hide/show cannot reset the size radial");
@@ -302,30 +288,100 @@ namespace ShockWave.ToyControl
             catch(Exception ex) {Debug.LogException(ex); if(!string.IsNullOrWhiteSpace(output)) File.WriteAllText(Path.Combine(output,"failure.txt"),ex.ToString()); EditorApplication.Exit(1);}
             finally {if(root!=null) UnityEngine.Object.DestroyImmediate(root); if(folder!=null && AssetDatabase.IsValidFolder(folder)) AssetDatabase.DeleteAsset(folder); EditorSceneManager.ClosePreviewScene(scene);}
         }
+        private static void VerifyConstraintRuntime(Transform avatar,Action<bool,string> check)
+        {
+            var manager=typeof(VRCConstraintBase).Assembly.GetType("VRC.Dynamics.VRCConstraintManager");
+            var flags=System.Reflection.BindingFlags.Public|System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Static;
+            manager.GetMethod("Initialize",flags).Invoke(null,null);
+            var edit=manager.GetProperty("CanExecuteConstraintJobsInEditMode",flags);var prior=(bool)edit.GetValue(null);edit.SetValue(null,true);
+            var parent=new GameObject("Scratch constraint runtime");parent.transform.SetParent(avatar,false);
+            var hand=new GameObject("Wrist");hand.transform.SetParent(parent.transform,false);hand.transform.localPosition=new Vector3(.2f,1,.1f);
+            var board=new GameObject("World board");board.transform.SetParent(parent.transform,false);board.transform.position=new Vector3(-.3f,1.2f,.5f);
+            var c=board.AddComponent<VRCParentConstraint>();
+            try {
+                c.Sources.Add(new VRCConstraintSource(hand.transform,1,Vector3.zero,Vector3.zero));c.IsActive=true;c.Locked=true;
+                if(!(bool)manager.GetMethod("IsConstraintRegistered",flags).Invoke(null,new object[]{c})) manager.GetMethod("RegisterConstraint",flags).Invoke(null,new object[]{c});
+                manager.GetMethod("Sdk_ManuallyRefreshGroups",flags).Invoke(null,new object[]{new VRCConstraintBase[]{c}});
+                void Solve() {c.ApplyConfigurationChanges();VRCDynamicsScheduler.UpdateConstraints(true);}
+                Solve();c.FreezeToWorld=true;Solve();var position=board.transform.position;var rotation=board.transform.rotation;
+                parent.transform.SetPositionAndRotation(new Vector3(1,.2f,-.8f),Quaternion.Euler(5,75,-12));Solve();
+                check(Vector3.Distance(position,board.transform.position)<.0001f && Quaternion.Angle(rotation,board.transform.rotation)<.02f,"Actual SDK keeps a frozen board fixed under root translation and rotation");
+                c.RebakeOffsetsWhenUnfrozen=true;c.FreezeToWorld=false;Solve();
+                check(Vector3.Distance(position,board.transform.position)<.0001f && Quaternion.Angle(rotation,board.transform.rotation)<.02f,"Actual SDK rebakes a grip/fit without a position or rotation jump");
+                var local=hand.transform.InverseTransformPoint(board.transform.position);var localRotation=Quaternion.Inverse(hand.transform.rotation)*board.transform.rotation;
+                hand.transform.SetPositionAndRotation(hand.transform.position+new Vector3(.1f,.05f,.2f),Quaternion.Euler(-15,50,20)*hand.transform.rotation);Solve();
+                check(Vector3.Distance(board.transform.position,hand.transform.TransformPoint(local))<.0001f && Quaternion.Angle(board.transform.rotation,hand.transform.rotation*localRotation)<.02f,"Actual SDK carries a rebaked panel with wrist translation and rotation");
+                c.FreezeToWorld=true;Solve();position=board.transform.position;rotation=board.transform.rotation;
+                parent.transform.SetPositionAndRotation(new Vector3(-1,0,1),Quaternion.Euler(0,-110,0));Solve();
+                check(Vector3.Distance(position,board.transform.position)<.0001f && Quaternion.Angle(rotation,board.transform.rotation)<.02f,"Actual SDK release returns to world lock after moving the grip");
+            }
+            finally {manager.GetMethod("UnregisterConstraint",flags).Invoke(null,new object[]{c});UnityEngine.Object.DestroyImmediate(parent);edit.SetValue(null,prior);}
+        }
         private static void VerifyPlacements(GameObject host,Animator animator,Transform avatar,Transform wrist,Action<bool,string> check)
         {
-            void Step(){for(var i=0;i<20;i++) animator.Update(.02f);}
+            var controller=(AnimatorController)animator.runtimeAnimatorController;
             var constraint=host.transform.Find("Panel").GetComponent<VRCParentConstraint>();
-            animator.SetBool(ToyControlContract.Prefix+"GrabRRight",true);animator.SetInteger("GestureRight",6);
-            foreach(var pair in new[]{(1,0),(2,4)}) {
-                animator.SetInteger(ToyControlContract.Prefix+"HandMode",pair.Item1);Step();
-                check(!constraint.FreezeToWorld && Mathf.Abs(constraint.Sources[pair.Item2].Weight-1)<.0001f,"Hand preset "+pair.Item1+" follows the correct anchor despite its own wrist touching a strip");
-                var state=((AnimatorController)animator.runtimeAnimatorController).layers[1].stateMachine.states.Single(s=>s.state.name==(pair.Item1==1 ? "Follow right hand" : "Follow back of right hand")).state;
-                check(state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters).Any(p=>p.name==ToyControlContract.Prefix+"InputReady" && p.value==1),"Attached hand mode explicitly keeps panel input ready");
-                animator.SetInteger("GestureRight",1);Step();
-                check(Mathf.Abs(constraint.Sources[pair.Item2].Weight-1)<.0001f,"A fist cannot steal an attached hand preset");animator.SetInteger("GestureRight",6);
+            check(AssetDatabase.LoadAllAssetsAtPath(AssetDatabase.GetAssetPath(controller)).OfType<AnimationClip>().SelectMany(AnimationUtility.GetCurveBindings).All(b=>!((b.propertyName.StartsWith("Sources.source4.") || b.propertyName.StartsWith("Sources.source5.")) && b.propertyName.Contains("Offset"))),"Runtime wrist-fit offsets are never overwritten by animation curves");
+            var contacts=host.transform.Find("Panel/Size/Contacts");
+            var stateHashes=Enumerable.Repeat(int.MinValue,controller.layers.Length).ToArray();var frames=0;
+            void Set(string name,bool value) => animator.SetBool(ToyControlContract.Prefix+name,value);
+            void Mode(int value) => animator.SetInteger(ToyControlContract.Prefix+"HandMode",value);
+            void Step(int count=20) {
+                for(var i=0;i<count;i++) {
+                    if(frames++%10==0) Set("RxBeat",!animator.GetBool(ToyControlContract.Prefix+"RxBeat"));
+                    animator.Update(.02f);
+                    // Unity does not execute VRC parameter drivers. Emulate their
+                    // actual Set operations once on entry, without hardware/OSC.
+                    for(var layer=0;layer<controller.layers.Length;layer++) {
+                        var info=animator.GetCurrentAnimatorStateInfo(layer);if(stateHashes[layer]==info.fullPathHash) continue;stateHashes[layer]=info.fullPathHash;
+                        var state=controller.layers[layer].stateMachine.states.First(s=>info.IsName(s.state.name)).state;
+                        foreach(var p in state.behaviours.OfType<VRCAvatarParameterDriver>().SelectMany(d=>d.parameters)) {
+                            var type=animator.parameters.Single(a=>a.name==p.name).type;
+                            if(type==AnimatorControllerParameterType.Bool) animator.SetBool(p.name,p.value!=0);
+                            else if(type==AnimatorControllerParameterType.Int) animator.SetInteger(p.name,(int)p.value);
+                            else animator.SetFloat(p.name,p.value);
+                        }
+                    }
+                }
             }
-            animator.SetInteger(ToyControlContract.Prefix+"HandMode",0);Step();
-            check(constraint.Sources[3].SourceTransform==avatar && Mathf.Abs(constraint.Sources[3].Weight-1)<.0001f,"Both hand toggles off follows avatar-root turns rather than tracked head tilt");
-            foreach(var hand in new[]{"L","R"}) foreach(var pose in new[]{6,7}) {
-                animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+"Right",true);animator.SetInteger(hand=="L" ? "GestureLeft" : "GestureRight",pose);Step();
-                check(!constraint.FreezeToWorld && Mathf.Abs(constraint.Sources[3].Weight-1)<.0001f,hand+" pistol/Thumbs Up at the edge cannot start a grab");
-                animator.SetBool(ToyControlContract.Prefix+"Grab"+hand+"Right",false);animator.SetInteger(hand=="L" ? "GestureLeft" : "GestureRight",0);
+            bool At(string name) => animator.GetCurrentAnimatorStateInfo(1).IsName(name);
+            foreach(var grip in ToyControlSetupWindow.GripInputs) Set(grip,false);
+            Mode(0);Step();check(constraint.FreezeToWorld && At("Dropped"),"Both hand modes off remains world-locked");
+            foreach(var hand in new[]{"L","R"}) foreach(var pose in new[]{2,6,7}) {
+                Set("Grab"+hand+"Right",true);animator.SetInteger(hand=="L" ? "GestureLeft" : "GestureRight",pose);Step();
+                check(constraint.FreezeToWorld && At("Dropped"),hand+" open/pistol/Thumbs Up cannot grab a handle");
+                Set("Grab"+hand+"Right",false);animator.SetInteger(hand=="L" ? "GestureLeft" : "GestureRight",0);
             }
-            animator.SetBool(ToyControlContract.Prefix+"GrabRRight",false);animator.SetInteger("GestureRight",0);
-            animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);animator.SetBool(ToyControlContract.Prefix+"GrabRRight",true);animator.SetInteger("GestureRight",1);Step();
-            check(Mathf.Abs(constraint.Sources[3].Weight-1)<.0001f,"Pointer mode cannot enter a physical grab even with a fist at the strip");
-            animator.SetBool(ToyControlContract.Prefix+"GrabRRight",false);animator.SetInteger("GestureRight",0);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0);Step();
+            foreach(var pointer in new[]{0f,1f}) foreach(var hand in new[]{"L","R"}) foreach(var edge in new[]{"Left","Right"}) {
+                var gesture=hand=="L" ? "GestureLeft" : "GestureRight";var free=hand=="L" ? "R" : "L";var source=hand=="L" ? 1 : 2;
+                animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",pointer);Set("Grab"+hand+edge,true);animator.SetInteger(gesture,1);Step();
+                check(At(hand=="L" ? "Grab left hand" : "Grab right hand") && !constraint.FreezeToWorld && constraint.Sources[source].Weight==1 && contacts.gameObject.activeSelf && animator.GetBool(ToyControlContract.Prefix+"InputReady"),"Stable "+hand+" "+edge+" grip allows free-hand input in mode "+pointer);
+                if(pointer==1) {
+                    foreach(var h in new[]{"L","R"}) animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+h+"Valid",1);
+                    animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",6);Step();animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",7);Step();
+                    check(animator.GetCurrentAnimatorStateInfo(free=="L" ? 6 : 7).IsName("Click / draw") && animator.GetCurrentAnimatorStateInfo(hand=="L" ? 6 : 7).IsName("Release before pointing"),"Only the free "+free+" hand can click/draw while holding with "+hand);
+                    animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",0);
+                } else check(contacts.Find("InTouch").gameObject.activeInHierarchy,"Free finger drawing remains enabled while holding in Touch mode");
+                animator.SetInteger(gesture,0);Step();check(constraint.FreezeToWorld && At("Release touch guard") && !contacts.gameObject.activeSelf,"Releasing a world grip guards input until the hand leaves its strip");
+                Set("Grab"+hand+edge,false);Step();check(At("Dropped") && constraint.FreezeToWorld && contacts.gameObject.activeSelf,"World release never resumes avatar/head following");
+            }
+            foreach(var pair in new[]{(1,0,"Follow right hand",4,"Adjusted in right hand","FitInHand"),(2,3,"Follow back of right hand",5,"Adjusted back of right hand","FitBackHand")}) {
+                Mode(pair.Item1);Set("GrabRRight",true);animator.SetInteger("GestureRight",1);Step();
+                check(At(pair.Item3) && constraint.Sources[pair.Item2].Weight==1,"Mounted right wrist cannot self-grab preset "+pair.Item1);
+                animator.SetInteger("GestureRight",7);Step();check(animator.GetCurrentAnimatorStateInfo(7).IsName("Release before pointing"),"Mounted right hand cannot click its own panel");
+                Set("GrabLLeft",true);animator.SetInteger("GestureLeft",1);Step();check(At("Grab left hand"),"Free left hand can reposition attached preset "+pair.Item1);
+                animator.SetInteger("GestureLeft",0);Step(40);
+                check(At(pair.Item5) && constraint.Sources[pair.Item4].Weight==1 && animator.GetBool(ToyControlContract.Prefix+pair.Item6),"Releasing after adjustment captures the selected wrist fit even while strip contact remains");
+                Set("GrabLLeft",false);Set("GrabRRight",false);Mode(0);Step();check(At("Dropped") && constraint.FreezeToWorld,"Turning an adjusted attachment off world-locks it");
+                Mode(pair.Item1);Step();check(At(pair.Item5),"The adjusted fit survives toggling its hand mode off and on");
+                Set("Visible",false);Step();Set("Visible",true);Step(40);check(At(pair.Item5),"The adjusted fit survives hiding and showing this avatar session");
+                Mode(0);animator.SetInteger("GestureRight",0);Step();
+            }
+            // A floating grip can become a right-wrist attachment without Unity.
+            Set("GrabRRight",true);animator.SetInteger("GestureRight",1);Step();Mode(1);Step();
+            check(At("Grab right hand"),"Selecting a hand mode while gripping does not jump to a preset");
+            animator.SetInteger("GestureRight",0);Step(40);check(At("Adjusted in right hand"),"Releasing the positioned grip attaches to the right wrist on the fly");
+            Set("GrabRRight",false);Mode(0);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0);Step();
             var preview=new GameObject("Scratch capture pose");preview.transform.SetParent(host.transform,false);
             var offset=new Vector3(.02f,.04f,.08f);var rotation=Quaternion.Euler(25,-10,40);
             preview.transform.SetPositionAndRotation(wrist.position+wrist.rotation*offset,wrist.rotation*rotation);
