@@ -2,6 +2,13 @@
 
 Updated: 2026-10-23.
 
+## 2026-10-23 — VCC 0.1.2 final publication verified
+
+- **Published:** [Avatar Panel 0.1.2](https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.2) targets final source `bafce54ed00b0f7f0f8dc896bebbf008ee933945`, with latest disabled. Windows v0.7.10 remains the public stable updater target; no EXE rebuild is required. Final [source checks](https://github.com/Szeb95/ShockWave/actions/runs/39882522551) and [listing deployment](https://github.com/Szeb95/ShockWave/actions/runs/39882522666) succeeded. The earlier candidate stayed a draft and was replaced before publication.
+- **Final evidence:** 217 isolated Unity checks pass in each color space, including SDK world-lock/rebake/wrist movement and the corrected temporary-fit invalidation/preset-offset policy. Gamma uses all 31 final packaged files exactly; zero package/scratch mismatches. Existing native panel/shocker checks pass all 140. Pointer/shocker render captures were inspected. The anonymous landing/listing/download checks pass; public ZIP SHA-256 `22d20bda29f2d521680eaf3ddf184779c7d1f5d526b3f5a969494c2ef55d2337`, 42,612 bytes. Uploaded digest, embedded manifest, listing checksum and downloaded bytes agree; previous VPM versions remain unchanged. Evidence: work/panel-handle-checks/public/verification.json and isolated panel-handle-{linear,gamma} reports.
+- **Final behavior / owner action:** both hand modes off world-locks the released panel. Fist handles work in Touch/Pointer and stable grips permit free-hand drawing. The mounted right wrist ignores self-grips; the left hand can reposition an attachment. Selecting a hand mode during a grip waits for release and rebakes the visible fit. The current temporary fit survives mode toggles/hide-show until a new handle grab or avatar reload; two independent persistent runtime fits are not claimed. Update VCC tools, explicitly Update Toy Control on Avatar and save/upload when ready, then retest headset handling and physical response. No real Unity write/import/launch, scene action, installed/running app or settings change, or device command was performed.
+
+
 ## 2026-10-23 — SDK inactive-offset correction before VCC 0.1.2 publication
 
 - SDK source inspection after the first prepared candidate showed that runtime unfreeze rebakes every parent source, including zero-weight sources. The first 215-check state/single-source solver run did not establish independent geometric fit retention. That candidate remains unpublished and is superseded; its prepared hash is not the final delivery.
