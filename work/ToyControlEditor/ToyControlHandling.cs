@@ -31,6 +31,9 @@ namespace ShockWave.ToyControl
             var bakeBack=State(place,"Capture back-hand fit",Placement(c,"Capture back-hand fit",true,false,.05f,5,true,contacts:false));
             var recall=State(place,"Recall beside right hand",Placement(c,"Recall",true,false,.2f,contacts:false));
             Driver(bakeIn,"FitInHand",1);Driver(bakeBack,"FitBackHand",1);
+            // The SDK rebakes every source offset, including zero-weight ones.
+            // A new grip therefore replaces the previous temporary fit.
+            foreach(var state in new[]{prepareLeft,prepareRight}) {Driver(state,"FitInHand",0);Driver(state,"FitBackHand",0);}
             Driver(recall,"FitInHand",0);Driver(recall,"FitBackHand",0);Driver(recall,"HandMode",0);
 
             void Mode(AnimatorStateTransition t,int value) => t.AddCondition(AnimatorConditionMode.Equals,value,ToyControlContract.Prefix+"HandMode");

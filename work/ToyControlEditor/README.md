@@ -46,7 +46,7 @@ To create a hand fit on the fly:
 2. While holding, select **In right hand** or **Back of right hand** in the radial menu. It keeps following the grip while held.
 3. Position it how you want relative to the right hand, then release the fist. It attaches there without jumping to the preset.
 
-Both hand modes remember their adjusted offsets separately while this avatar remains loaded, including hide/show and toggling a mode off/on. These in-game adjustments reset on avatar reload; they do not edit the Unity avatar or persist to disk. Use the Editor capture procedure above for a permanent uploaded default. With both hand modes off, releasing the handle returns to world lock after the touch guard.
+The adjusted fit survives hide/show and toggling its hand mode off/on. **A new handle grab replaces the previous temporary fit**; avatar reload resets it too. In-game adjustments do not edit the Unity avatar or persist to disk. Use the Editor capture procedure above for permanent uploaded defaults. With both hand modes off, releasing the handle returns to world lock after the touch guard.
 
 Existing saved Size can override the new default. Size maps 0–100% to 0.4–1.6 times the 74 cm base width; 20% is about 47 cm wide, excluding strips.
 

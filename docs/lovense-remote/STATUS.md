@@ -2,6 +2,13 @@
 
 Updated: 2026-10-23.
 
+## 2026-10-23 — SDK inactive-offset correction before VCC 0.1.2 publication
+
+- SDK source inspection after the first prepared candidate showed that runtime unfreeze rebakes every parent source, including zero-weight sources. The first 215-check state/single-source solver run did not establish independent geometric fit retention. That candidate remains unpublished and is superseded; its prepared hash is not the final delivery.
+- A new grip now clears both temporary-fit validity flags before rebaking. The selected mode becomes valid again only after releasing/rebaking the positioned panel. Default in-hand/back-hand offset slots are reset by animation, while runtime slots remain unanimated. A current fit survives mode toggles/hide-show until the next handle grab or avatar reload; separate persistent in-game fits are not claimed. Permanent Editor captures remain separate and unchanged.
+- Revised Linear run passes 217 checks, including both temporary-fit invalidation and preset-offset restoration assertions. Final Gamma verification is pending in scratch. The final 31-file candidate is `22d20bda29f2d521680eaf3ddf184779c7d1f5d526b3f5a969494c2ef55d2337`; the earlier draft asset is replaced before publication. App/protocol/hardware/real Unity preservation scope is unchanged. Final publication evidence follows.
+
+
 ## 2026-10-23 — world lock, pointer handles and in-game wrist fitting prepared
 
 - **Implemented:** both hand modes off now world-locks the released panel, with no avatar-root source. Fist grips work at either floating handle in Touch or Pointer mode. Stable held states enable free-hand drawing; attach/drop/rebake guards require fresh input. A private HoldingHand value suppresses the gripping/mounted hand's pointer and presses. Hand Gun/Thumbs Up still cannot grab. An attached right wrist ignores self-grips; the free left Fist can reposition the panel.

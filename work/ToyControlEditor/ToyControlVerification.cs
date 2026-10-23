@@ -370,6 +370,7 @@ namespace ShockWave.ToyControl
                 check(At(pair.Item3) && constraint.Sources[pair.Item2].Weight==1,"Mounted right wrist cannot self-grab preset "+pair.Item1);
                 animator.SetInteger("GestureRight",7);Step();check(animator.GetCurrentAnimatorStateInfo(7).IsName("Release before pointing"),"Mounted right hand cannot click its own panel");
                 Set("GrabLLeft",true);animator.SetInteger("GestureLeft",1);Step();check(At("Grab left hand"),"Free left hand can reposition attached preset "+pair.Item1);
+                check(!animator.GetBool(ToyControlContract.Prefix+"FitInHand") && !animator.GetBool(ToyControlContract.Prefix+"FitBackHand") && constraint.Sources[3].ParentPositionOffset==Vector3.zero && constraint.Sources[3].ParentRotationOffset==Vector3.zero,"New grips invalidate previous temporary fits and restore the back-hand preset offsets");
                 animator.SetInteger("GestureLeft",0);Step(40);
                 check(At(pair.Item5) && constraint.Sources[pair.Item4].Weight==1 && animator.GetBool(ToyControlContract.Prefix+pair.Item6),"Releasing after adjustment captures the selected wrist fit even while strip contact remains");
                 Set("GrabLLeft",false);Set("GrabRRight",false);Mode(0);Step();check(At("Dropped") && constraint.FreezeToWorld,"Turning an adjusted attachment off world-locks it");

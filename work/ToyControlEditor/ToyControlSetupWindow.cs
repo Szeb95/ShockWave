@@ -296,7 +296,7 @@ namespace ShockWave.ToyControl
             Curve(clip,"Panel",typeof(VRCParentConstraint),"RebakeOffsetsWhenUnfrozen",rebake ? 1 : 0,duration);
             Curve(clip,"Panel/Size/Contacts",typeof(GameObject),"m_IsActive",visible && contacts ? 1 : 0,duration);
             for(var i=0;i<6;i++) Curve(clip,"Panel",typeof(VRCParentConstraint),"Sources.source"+i+".Weight",i==source ? 1 : 0,duration);
-            foreach(var kind in new[] {"ParentPositionOffset","ParentRotationOffset"}) foreach(var axis in new[] {"x","y","z"}) Curve(clip,"Panel",typeof(VRCParentConstraint),"Sources.source0."+kind+"."+axis,0,duration);
+            foreach(var preset in new[]{0,3}) foreach(var kind in new[] {"ParentPositionOffset","ParentRotationOffset"}) foreach(var axis in new[] {"x","y","z"}) Curve(clip,"Panel",typeof(VRCParentConstraint),"Sources.source"+preset+"."+kind+"."+axis,0,duration);
             return clip;
         }
         private static AnimationClip Material(AnimatorController c,string name,string property,float value,float duration) {var clip=Clip(c,name,duration); Curve(clip,BoardPath,typeof(MeshRenderer),"material."+property,value,duration); return clip;}
