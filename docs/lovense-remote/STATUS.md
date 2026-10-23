@@ -2,6 +2,12 @@
 
 Updated: 2026-10-23.
 
+## 2026-10-23 — compact avatar gesture guide prepared (VCC 0.1.3)
+
+- Added the owner's requested bottom guide to both avatar pages: Fist = grab handle | Finger gun = point | Curl index (thumbs up) = click. It uses small muted text baked into the existing label textures. The shocker connection label moves below the sliders and above the guide to avoid overlap. No new geometry, materials, parameters, hit targets, gesture/control behavior or app/protocol changes; existing app 0.7.10 remains compatible.
+- Initial scratch render inspection caught the shocker status overlap; final spacing is being verified in the separate scratch project. Final 31-file candidate SHA-256 `31c94464332965b58d774bb6031dd49ab8e1f4a02d95580bc4bce6c1bf968438`. No real Unity import/write/launch, avatar/scene action, installed/running app or settings change, or hardware command. Explicit VCC update plus avatar Update/upload remains the owner's action. Final visual/check/publication evidence follows; local artifacts are in work/panel-gesture-help-checks and isolated panel-gesture-help-gamma.
+
+
 ## 2026-10-23 — VCC 0.1.2 final publication verified
 
 - **Published:** [Avatar Panel 0.1.2](https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.2) targets final source `bafce54ed00b0f7f0f8dc896bebbf008ee933945`, with latest disabled. Windows v0.7.10 remains the public stable updater target; no EXE rebuild is required. Final [source checks](https://github.com/Szeb95/ShockWave/actions/runs/39882522551) and [listing deployment](https://github.com/Szeb95/ShockWave/actions/runs/39882522666) succeeded. The earlier candidate stayed a draft and was replaced before publication.

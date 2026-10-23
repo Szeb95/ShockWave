@@ -74,6 +74,29 @@
             "Assets\\Editor\\SzebsToysToyControl": ""
           },
           "zipSHA256": "22d20bda29f2d521680eaf3ddf184779c7d1f5d526b3f5a969494c2ef55d2337"
+        },
+        "0.1.3": {
+          "name": "com.szebs.shockwave.avatar-panel",
+          "displayName": "ShockWave Avatar Panel",
+          "version": "0.1.3",
+          "description": "Local VRChat avatar panel for ShockWave. Touch and either-hand pointing, toy patterns and shocker controls. Requires Windows app 0.7.10 or later and an explicit avatar Update/upload.",
+          "unity": "2022.3",
+          "author": {
+            "name": "Szeb95",
+            "url": "https://github.com/Szeb95"
+          },
+          "url": "https://github.com/Szeb95/ShockWave/releases/download/panel-v0.1.3/ShockWave-Avatar-Panel-0.1.3.zip",
+          "documentationUrl": "https://github.com/Szeb95/ShockWave/blob/main/work/ToyControlEditor/README.md",
+          "changelogUrl": "https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.3",
+          "license": "SEE LICENSE IN LICENSE.txt",
+          "vpmDependencies": {
+            "com.vrchat.avatars": ">=3.10.4",
+            "com.vrcfury.vrcfury": ">=1.1371.1-beta.16"
+          },
+          "legacyFolders": {
+            "Assets\\Editor\\SzebsToysToyControl": ""
+          },
+          "zipSHA256": "31c94464332965b58d774bb6031dd49ab8e1f4a02d95580bc4bce6c1bf968438"
         }
       }
     }

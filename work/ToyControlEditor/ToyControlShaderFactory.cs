@@ -106,6 +106,7 @@ namespace ShockWave.ToyControl
             Centered(t,"Clear curve",new Rect(40,176,132,60),14,white,FontStyle.Bold); Centered(t,"STOP ALL",new Rect(176,176,132,60),14,white,FontStyle.Bold);
             Centered(t,"Select a function to draw",new Rect(405,720,765,48),20,faint,FontStyle.Bold);
             Centered(t,"Recording",new Rect(365,758,130,42),14,white,FontStyle.Bold);
+            GestureHelp(t,faint);
             return Save(t,folder+"/Labels.png");
         }
         private static Texture2D ShockerLabels(string folder)
@@ -122,8 +123,10 @@ namespace ShockWave.ToyControl
             Centered(t,"Vibrate",new Rect(810,430,346,64),22,white,FontStyle.Bold); Centered(t,"Sound",new Rect(810,516,346,64),22,white,FontStyle.Bold);
             Text(t,"Right > release > left within 3 seconds",800,600,15,faint); Text(t,"Two steps for every shock",800,626,16,faint);
             Text(t,"<",58,652,20,faint); Text(t,">",274,652,20,faint);
+            GestureHelp(t,faint);
             return Save(t,folder+"/ShockerLabels.png");
         }
+        private static void GestureHelp(Texture2D texture,Color color) => Centered(texture,"Fist = grab handle   |   Finger gun = point   |   Curl index (thumbs up) = click",new Rect(365,677,839,26),14,color);
         private static Texture2D Status(string folder)
         {
             var t=Blank(232*TextScale,160*TextScale); var accent=new Color(24/255f,185/255f,145/255f); var faint=new Color(181/255f,186/255f,193/255f);

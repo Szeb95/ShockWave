@@ -157,8 +157,8 @@ float4 frag(v2f input):SV_Target
         color=lerp(color,white,number(p,float2(558,600),tenths/10,float2(13,30)));
         color=lerp(color,white,glyph(p,float2(600,600),float2(13,30),14)); color=lerp(color,white,glyph(p,float2(614,600),float2(13,30),16+tenths%10)); color=lerp(color,white,glyph(p,float2(628,600),float2(13,30),83));
         if(pages>1) {color=lerp(color,faint,number(p,float2(141,654),page+1,float2(7,17)));color=lerp(color,faint,glyph(p,float2(168,654),float2(7,17),15));color=lerp(color,faint,number(p,float2(172,654),pages,float2(7,17)));}
-        float4 badge=tex2D(_Status,float2((p.x-800)/232,1-(p.y-661+(online<0.5 ? 80 : _Online<0.75 ? 40 : 0))/160));
-        if(p.x>=800 && p.x<1032 && p.y>=661 && p.y<701) color=lerp(color,badge.rgb,badge.a);
+        float4 badge=tex2D(_Status,float2((p.x-418)/232,1-(p.y-635+(online<0.5 ? 80 : _Online<0.75 ? 40 : 0))/160));
+        if(p.x>=418 && p.x<650 && p.y>=635 && p.y<675) color=lerp(color,badge.rgb,badge.a);
         #ifndef UNITY_COLORSPACE_GAMMA
         color=GammaToLinearSpace(color);
         #endif
