@@ -2,6 +2,13 @@
 
 Updated: 2026-10-23.
 
+## 2026-10-23 — Windows 0.7.10 / VCC 0.1.1 publication verified
+
+- **Public delivery:** [Windows 0.7.10](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.10) is stable latest; [Avatar Panel 0.1.1](https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.1) has latest disabled. Both target reviewed source `7ed8b3cfb6540758ab9f2c9514d6839374df8e9c`. The 24 source/documentation paths passed added-line privacy/whitespace review; generated files and raw live diagnostics were excluded. Earlier releases remain intact.
+- **Hosted/public checks:** [source checks](https://github.com/Szeb95/ShockWave/actions/runs/39875261055) and [VCC listing deployment](https://github.com/Szeb95/ShockWave/actions/runs/39875261026) succeeded. Windows builds are warning-free; hosted panel 140, updater 69, remote 94 and SPS 282 checks pass. The landing page returns HTTP 200 with its VCC link. The anonymous latest API selects Windows v0.7.10, and anonymous downloads of both ZIPs match the tested SHA-256 hashes in the prepared entry. Public VPM 0.1.1 checksum matches its download; 0.1.0 remains unchanged. Evidence: work/panel-placement-checks/public/verification.json and hosted-source.log.
+- **Owner action / limits:** update the app and VCC package, then explicitly Update Toy Control on Avatar through Tools/ShockWave/Panel and save/upload when ready. Use the capture controls for an exact wrist fit. No real Unity project write/import/launch, automatic avatar install/save, normal app launch/restart, real settings change or device command was performed. Headset behavior/fit and physical-device response still need an owner retest after upload.
+
+
 ## 2026-10-23 — hand presets, shocker pointer and battery hiding prepared
 
 - **Requested / implemented:** Windows 0.7.10 and VCC 0.1.1 add mutually exclusive In right hand / Back of right hand radial presets alongside Show panel and saved Panel size. Automatic alignment uses humanoid index/little-finger geometry; both presets follow full wrist rotation. Both off retains avatar-root movement/turns without tracked head pitch/roll; strict joystick-source discrimination is not claimed. The setup window captures the visible Panel relative to the live wrist in paused Play mode without moving/saving a scene. Explicit Update persists Placement.json and later updates retain it. Whole-host screenshot transforms were not treated as portable wrist offsets.

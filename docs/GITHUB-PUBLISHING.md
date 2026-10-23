@@ -8,6 +8,8 @@ First public release: **[ShockWave 0.7.0](https://github.com/Szeb95/ShockWave/re
 
 **0.7.9 / Avatar Panel 0.1.0 (2026-10-23):** [Windows release](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.9) and [Add to Creator Companion](https://szeb95.github.io/ShockWave/) are public and anonymously checksum-verified. The separate `panel-v0.1.0` release is not latest; Windows v0.7.9 remains the updater target. Source checks and Pages deployment passed. See the latest workstream status for exact evidence and the explicit avatar Update/upload requirement.
 
+**0.7.10 / Avatar Panel 0.1.1 (2026-10-23):** [Windows release](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.10) is now stable latest; [VCC 0.1.1](https://github.com/Szeb95/ShockWave/releases/tag/panel-v0.1.1) remains excluded from latest. Both target source `7ed8b3cfb6540758ab9f2c9514d6839374df8e9c`. Hosted source checks and listing deployment passed; anonymous ZIP downloads match their tested hashes, and the listing preserves 0.1.0. This release pairs shocker-page pointer/readiness corrections with wrist-relative hand presets/capture and hidden unknown battery. Both app and VCC update plus explicit avatar Update/upload are required. The real avatar project and installed/running app were not changed; headset/physical retesting remains necessary.
+
 ## Current state
 
 The published project includes its homepage with original banner and simulated screenshots, setup/build links, contribution/security guidance, issue/PR templates, third-party notices and a Windows source-check workflow. Repository topics and private vulnerability reporting are enabled.
