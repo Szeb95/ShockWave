@@ -15,12 +15,14 @@ internal static partial class Program
         Application.EnableVisualStyles();
         try
         {
-            if (args.Contains("--friends-internet")) FriendInternet();
+            if (args.Contains("--render-gpu")) RenderGpu();
+            else if (args.Contains("--render-stress")) RenderStress();
+            else if (args.Contains("--friends-internet")) FriendInternet();
             else if (args.Contains("--log-stress")) LogStress();
-            else { Receiver(); LiveGestureReplacement(); Inventory(); InventoryRemoval(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); FriendStorage(); FriendPage(); Panel(); }
+            else { Receiver(); LiveGestureReplacement(); Inventory(); InventoryRemoval(); SpsHandoff(); InternetTiming(); RemoteTimeoutSelection(); RemoteDiagnostics(); FriendStorage(); FriendPage(); RenderSnapshots(); RenderQueue(); RenderDesktopInput(); RenderFailure(); Panel(); }
             if (args.Contains("--package-startup")) SharingCode();
             if (args.Contains("--internet")) Internet();
-            File.WriteAllText(Path.Combine(artifacts, args.Contains("--friends-internet") ? "friends-internet-report.json" : args.Contains("--log-stress") ? "log-stress-report.json" : "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet") || args.Contains("--friends-internet"), PackagedStartup = args.Contains("--package-startup") }));
+            File.WriteAllText(Path.Combine(artifacts, args.Contains("--render-gpu") ? "render-gpu-report.json" : args.Contains("--render-stress") ? "render-stress-report.json" : args.Contains("--friends-internet") ? "friends-internet-report.json" : args.Contains("--log-stress") ? "log-stress-report.json" : "native-report.json"), JsonSerializer.Serialize(new { passed, PhysicalOutput = false, PublicHelper = args.Contains("--internet") || args.Contains("--friends-internet"), PackagedStartup = args.Contains("--package-startup") }));
             Console.WriteLine($"Remote connection: {passed} checks passed"); return 0;
         }
         catch (Exception e) { Console.Error.WriteLine(e); File.WriteAllText(Path.Combine(artifacts,"native-failure.txt"),e.ToString()); return 1; }

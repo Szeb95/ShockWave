@@ -251,12 +251,13 @@ internal sealed class GpuRenderer : IDisposable
         fixed(Vector4* data=values) context.UpdateSubresource(patternTexture,0,null,(nint)data,240*16,0);
     }
     public bool UploadLoopPatterns(PanelModel model)
+        => UploadLoopPatterns(model.Functions.Select(row=>row.Connected ? row.Function.Pattern : null).ToArray());
+    public bool UploadLoopPatterns(IReadOnlyList<PatternClip?> rows)
     {
-        var rows=model.Functions.ToArray();
         var changed=false;
         for(var row=0;row<loopClips.Length;row++)
         {
-            var clip=row<rows.Length && rows[row].Connected ? rows[row].Function.Pattern : null;
+            var clip=row<rows.Count ? rows[row] : null;
             if(ReferenceEquals(loopClips[row],clip)) continue;
             loopClips[row]=clip; changed=true;
             for(var x=0;x<240;x++) loopSamples[row*240+x]=clip?.At(x/239.0*clip.Duration) ?? 0;

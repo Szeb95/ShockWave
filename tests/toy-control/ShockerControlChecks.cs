@@ -117,5 +117,21 @@ internal static class ShockerControlChecks
         frame["ShockReady"]=1; frame["ShockArmed"]=1; frame["ShockRemaining"]=1;
         File.WriteAllText(Path.Combine(artifacts,"shocker-feedback.json"),JsonSerializer.Serialize(new {version=ToyControlContract.Version,values=frame.Select(v=>new {name=v.Key,value=v.Value})}));
         check(renderer.CompileError is null,"production shocker shader compiles on Direct3D 11");
+
+        // Follow avatar OSC through the shared session with a remote selected target.
+        // The callback records the command only; no provider or hardware is contacted.
+        session.Vrc.Reset();if(session.PointerMode) session.Action("InInputMode",false);
+        session.SetPage(true);now+=.1;s.Select(1);s.SetSlider(30,.8f);s.SetSlider(31,1);
+        Put("Visible",true);Put("InBeat",true);Put("InShockerReady",true);session.Tick(now);
+        var remoteBefore=output.Count;
+        Touch(1088,308,false);Touch(1088,308,true);Touch(1088,308,false);
+        Touch(878,308,true);Touch(878,308,false);
+        check(output.Count==remoteBefore+1 && output[^1]==(remote.Id,"Shock",40,2000),
+            "in-game touch confirmation routes one remote shock with the advertised owner caps");
+        session.Action("InInputMode",false);remoteBefore=output.Count;
+        Point("L",1088,false);Point("L",1088,true);Point("L",1088,false);
+        Point("L",878,true);Point("L",878,false);
+        check(output.Count==remoteBefore+1 && output[^1]==(remote.Id,"Shock",40,2000),
+            "in-game pointer confirmation routes one remote shock with the advertised owner caps");
     }
 }

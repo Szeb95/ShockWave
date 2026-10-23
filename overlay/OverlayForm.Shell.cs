@@ -112,6 +112,7 @@ internal sealed partial class OverlayForm : Form
         remoteSession.Log += message => AppendLog("remote", message);
         remoteSession.Toys.Log += message => AppendLog("remote", message);
         toyControlPage.Session.Log += message => AppendLog("remote", message);
+        toyControlPage.Diagnostic += message => AppendLog("remote", message);
         toyControlPage.OscInput += spsPage.Receive;
         toyControlPage.OscReset += spsPage.ResetInput;
         toyControlPage.SpsPresence = () => spsPage.SignalsEnabled;

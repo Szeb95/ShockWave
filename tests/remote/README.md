@@ -1,5 +1,13 @@
 # Remote connection checks
 
+Local display-worker regressions verify frozen labels while the live model changes, one latest pending frame, retained Clear/display state, single-thread graphics ownership/disposal, immediate owner Stop during a blocked render, nonblocking shutdown and the existing pause/input-release behavior after a display failure. These default checks use fake graphics and simulated controllers.
+
+Actual desktop mouse events also verify immediate Stop all before the first draw, ignored graph input for an undisplayed selection, accepted fresh input after drawing, and shock confirmation blocked until changed intensity/duration/armed state is displayed. These checks do not send a physical shock or toy command.
+
+Add `--render-stress` separately to reproduce/control a slow display: a real isolated ToyControlPage, a 33 ms UI timer, simulated 180 ms graphics calls and a receiver input with 150 ms remaining. The synchronous drawing arrangement records expiry; the new graphics worker keeps UI updates/receiver renewals progressing. `work/remote-checks/render-performance.json` records observed gaps/work/frames/expiry. This opt-in throughput check has no shared-CI performance guarantee and changes no production deadline or network timestamp.
+
+Add `--render-gpu` separately for the actual production Direct3D backend on its graphics thread, including frozen labels/state, a window swap chain, present and nonblocking page shutdown/resource cleanup. It writes `work/remote-checks/background-toy-panel.png` for visual inspection. Only an isolated offscreen window is shown; no normal app startup, settings, Bluetooth/device output or Unity is involved.
+
 Inventory-removal regressions keep a local and two friend functions active, then remove one friend function without ticking the graph. Its row/lease must disappear immediately while the other inputs continue. Friend disconnect removes all remote rows, and returning inventory starts unselected at zero with no restored activity. This specifically covers a paused OSC/render timer; no real devices are used.
 
 The 0.7.7 saved-friends checks cover isolated Windows encryption/reload, corrupt/failed storage preservation, key replacement refusal, rename/Forget and offscreen friend selection with Connect initially off. Node `remote-friends.test.mjs` covers both-side persistence acknowledgments, distinct private nonce derivation, failure, simultaneous saves, duplicate/malformed/expired requests and deterministic saved callers. No real user store is used.

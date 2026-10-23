@@ -6,24 +6,42 @@ namespace ShockWave.Overlay;
 
 internal static class ToyControlLabels
 {
-    public static Bitmap Create(ToyControlSession session)
+    internal sealed record DrawText(string Text, RectangleF Bounds, float Size, Color Color, bool Bold, bool Center);
+    internal sealed class Frame(DrawText[] commands)
+    {
+        public Bitmap Draw()
+        {
+            var image = new Bitmap(1240,800,PixelFormat.Format32bppArgb);
+            try
+            {
+                using var g=Graphics.FromImage(image); g.Clear(Color.Transparent); g.TextRenderingHint=TextRenderingHint.AntiAliasGridFit;
+                foreach(var command in commands)
+                {
+                    using var font=new Font("Segoe UI",command.Size,command.Bold ? FontStyle.Bold : FontStyle.Regular,GraphicsUnit.Pixel);
+                    using var brush=new SolidBrush(command.Color);
+                    using var format=command.Center ? new StringFormat {Alignment=StringAlignment.Center,LineAlignment=StringAlignment.Center}
+                        : new StringFormat {Trimming=StringTrimming.EllipsisCharacter,FormatFlags=StringFormatFlags.NoWrap};
+                    g.DrawString(command.Text,font,brush,command.Bounds,format);
+                }
+                return image;
+            }
+            catch {image.Dispose();throw;}
+        }
+    }
+    public static Bitmap Create(ToyControlSession session) => Capture(session).Draw();
+    // Capture values on the UI thread. Rasterization never reads a live session/model.
+    public static Frame Capture(ToyControlSession session)
     {
         var model = session.DisplayModel;
-        var image = new Bitmap(1240, 800, PixelFormat.Format32bppArgb);
-        using var g = Graphics.FromImage(image); g.Clear(Color.Transparent); g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+        List<DrawText> commands=[];
         var white = Color.FromArgb(242,243,245); var faint = Color.FromArgb(181,186,193); var green = Color.FromArgb(24,185,145);
         void Text(string value, float x, float y, float size, Color? color = null, bool bold = false, float width = 240)
         {
-            using var font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-            using var brush = new SolidBrush(color ?? white);
-            using var format = new StringFormat { Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap };
-            g.DrawString(value, font, brush, new RectangleF(x,y,width,size*1.8f), format);
+            commands.Add(new(value,new RectangleF(x,y,width,size*1.8f),size,color ?? white,bold,false));
         }
         void Center(string value, RectangleF box, float size, bool bold = false)
         {
-            using var font = new Font("Segoe UI", size, bold ? FontStyle.Bold : FontStyle.Regular, GraphicsUnit.Pixel);
-            using var brush = new SolidBrush(white); using var format = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
-            g.DrawString(value,font,brush,box,format);
+            commands.Add(new(value,box,size,white,bold,true));
         }
         if(session.ShockerPage)
         {
@@ -48,7 +66,7 @@ internal static class ToyControlLabels
             Text("Right → release → left within 3 seconds",800,600,15,faint,width:390);
             Text(session.Shockers.Armed ? $"Confirm · {Math.Ceiling(session.Shockers.Remaining(ToyOscRouter.Clock)*3):0}s remaining" : "Two steps for every shock",800,626,16,session.Shockers.Armed ? green : faint,width:390);
             Text(session.TestMode ? "TEST MODE · no device output" : "Live · owner limits apply",800,661,13,faint,width:390);
-            return image;
+            return new(commands.ToArray());
         }
         Text("TOY FUNCTIONS",43,124,17,white,true); Text("Choose functions to draw together",43,151,12,faint);
         for (var i=0;i<model.Visible.Count();i++)
@@ -77,6 +95,6 @@ internal static class ToyControlLabels
         var status=session.Vrc.IsLive ? "VRC CONNECTED" : "WAITING FOR VRC";
         Text(status,960,633,14,session.Vrc.IsLive ? green : faint,true,width:213);
         Text(session.TestMode ? "Test mode · no toy output" : "Live · Toy panel limits apply",960,654,11,faint,width:213);
-        return image;
+        return new(commands.ToArray());
     }
 }
