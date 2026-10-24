@@ -63,7 +63,7 @@ internal sealed class ToyControlPage : UserControl
             if(Session.ShockerPage) { surface.Capture=true; Session.Shockers.Press(0,hit,ToyOscRouter.Clock); }
             if(hit is 30 or 31) { slider=hit; surface.Capture=true; Session.Slider(p,hit); }
             if(hit==10) { drawing=true; surface.Capture=true; Session.Draw(p,false,true); }
-            else if(hit is >=1 and <=7) Session.Action("InRow"+(hit-1),false);
+            else if(hit is >=1 and <=7 && !Session.ShockerPage) Session.Action("InRow"+(hit-1),false);
             else if(ToyControlLayout.Action(hit) is { } action) Session.Action(action,false);
         };
         surface.MouseMove+=(_,e) =>

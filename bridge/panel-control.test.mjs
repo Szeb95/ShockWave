@@ -4,6 +4,25 @@ import { startBridge } from './bridge.mjs';
 import sample from './config.example.json' with { type: 'json' };
 
 for (const provider of ['OpenShock', 'PiShock']) {
+  test(`${provider}: a selected group retains separate caps, cooldown and pause per shocker`, async () => {
+    const config=structuredClone(sample);config.provider=provider;config.dryRun=true;config.piShockUsername='fixture-user';
+    const first={...config.shockers[0],key:'first',name:'First',uuid:provider==='PiShock' ? '42/7' : '',cooldownMs:60000,
+      manualMinIntensity:0,manualMaxIntensity:40,manualMinDurationMs:300,manualMaxDurationMs:2000};
+    const second={...first,key:'second',name:'Second',uuid:provider==='PiShock' ? '42/8' : '',cooldownMs:0,
+      manualMaxIntensity:65,manualMaxDurationMs:500};
+    config.shockers=[first,second];config.piShockShockers=[first,second];
+    const logs=[];const bridge=await startBridge(config,'',{externalOsc:true,log:line=>logs.push(line)});
+    const send=()=>{const expires=Date.now()+200;return Promise.all(['first','second'].map(key=>bridge.controlPanel(key,'Shock',80,15000,expires)));};
+    try {
+      assert.deepEqual(await send(),[true,true]);
+      assert.match(logs.find(l=>l.includes('[First] TEST ONLY:')),/Shock 40% for 2000 ms/);
+      assert.match(logs.find(l=>l.includes('[Second] TEST ONLY:')),/Shock 65% for 500 ms/);
+      assert.deepEqual(await send(),[false,true]);
+      second.paused=true;bridge.configure(config);assert.deepEqual(await send(),[false,false]);
+      assert.equal(logs.filter(l=>l.includes('TEST ONLY:')).length,3);
+    } finally {await bridge();}
+  });
+
   test(`${provider}: panel commands expire, cap absolute values, preserve pause/cooldown and never exceed 15 seconds`, async () => {
     const config=structuredClone(sample); config.provider=provider; config.dryRun=true; config.piShockUsername='fixture-user';
     const target={...config.shockers[0],key:'fixture',uuid:provider==='PiShock' ? '42/7' : '',cooldownMs:0,

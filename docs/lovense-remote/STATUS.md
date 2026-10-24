@@ -1,6 +1,14 @@
 # Workstream status
 
-Updated: 2026-10-23.
+## 2026-10-24 — multi-shocker controls prepared for push and Windows 0.7.11 draft
+
+- Owner requested pushing the completed multi-shocker work. Integrated the reviewed twelve production/test files plus the matching documentation into the existing publishing checkout; unrelated local phone-source work remains separate. The source version and release tooling now name 0.7.11. No VCC release or avatar update is required: existing v7 per-row feedback supports multiple selection. A future explicit avatar update can refresh the static selection hint.
+- Shocker rows toggle independently across list pages on desktop, touch and either-hand pointer. Sliders/Vibrate/Sound or one right-arm → release → left-confirm operate on the selected group with each target's own caps. Selection/value/context changes cancel confirmation; unavailable targets drop out without reconnect re-selection. All submissions retain one original 250 ms creation time; stalls/cancellation drop remaining attempts without retry or replay. Partial submission/helper enqueue failure is reported. Existing limits, pause, cooldown, credentials, Test mode, ownership and provider/receiver gates remain.
+- Local development verification before this push: 170 toy-control checks (67 shocker checks), 118 remote/desktop-input checks and four provider bridge panel checks pass with simulated output. The complete preview passes three isolated native-worker startup probes, dependency hashes/connection-worker startup and full archive verification. The publishing checkout is verified separately before committing; the draft package and hosted-check results are recorded in a later entry. No physical-device, headset or clean-PC result is implied.
+- Exact publishing-checkout verification: the same 170 toy-control, 118 remote/desktop and four provider checks pass, along with 69 updater checks. The standard release packager creates `ShockWave-0.7.11-win-x64.zip`, **116,042,301 bytes**, SHA-256 **`7ca49bc8f6a49e72e7011bb54130f8be5dc886217ae99536c9ecd56880db3dd3`**. The production updater verifier checks all **1,366 manifest files** and embedded EXE version 0.7.11. Three native-worker probes, locked dependency hashes and the connection-worker invitation/shutdown check pass. New sources were privacy/whitespace reviewed; diagnostics and artifacts stay outside Git. Local evidence is under `work/shocker-multiple-release/` in the publishing checkout. No stable release is published by this preparation.
+- Scope: only reviewed source/docs and release version defaults are staged. No real Unity project write/import/launch, scene/avatar/settings change, normal app launch, installed-app replacement or hardware command. The owner explicitly updates/installs an app; avatar installation remains an explicit Editor action.
+
+Updated: 2026-10-24.
 
 ## 2026-10-23 — remote in-game shockers verified; source publication authorized
 

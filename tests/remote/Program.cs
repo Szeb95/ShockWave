@@ -87,6 +87,14 @@ internal static partial class Program
         var toy = new RemoteToyInfo(new string('a',32),"Friend toy",60,[new(new string('b',32),"Vibration","Vibration",45)]);
         r.Receive("inventory", Element(new RemoteInventory([toy], [new(new string('c',32),"Friend shocker","PiShock",30,500)])));
         Check(r.Toys.Snapshot.Devices.Single().DeviceKey.StartsWith("remote/") && r.Shockers.Single().Maximum == 30, "remote toy inventory and future shocker inventory remain separate");
+        // A connected fixture has no worker, provider or physical output. Exercise
+        // the group timestamp guards and the helper-queue failure result.
+        typeof(RemoteSession).GetProperty(nameof(RemoteSession.Connected))!.SetValue(r,true);
+        var created=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); var shocker=r.Shockers.Single().Id;
+        Check(!r.SendShock(shocker,"Shock",30,500,created-300) && !r.SendShock(shocker,"Shock",30,500,created+5000),
+            "remote group members reject old or future creation times instead of receiving a fresh deadline");
+        Check(!r.SendShock(shocker,"Shock",30,500,created),"missing or failed remote helper cannot report a group member as submitted");
+        typeof(RemoteSession).GetProperty(nameof(RemoteSession.Connected))!.SetValue(r,false);
         using var panel = new ToyControlSession(() => f.Adapter.Snapshot, () => f.Controller) { Remote = r.Toys };
         panel.Model.ChangeRoute(2); panel.Tick(ToyOscRouter.Clock);
         Check(panel.Model.FunctionCount == 3, "unified list displays local functions and friend's remote function");

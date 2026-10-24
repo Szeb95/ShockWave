@@ -422,7 +422,7 @@ internal sealed class VrcToyInput(ToyControlSession session)
             {
                 if(session.ShockerPage) session.Shockers.Press(hand+1,hit,now);
                 if(hit is 10 or 30 or 31) { pointerHand=hand; pointerDrag=hit; if(hit==10) session.Draw(point,true); else session.Slider(point,hit); }
-                else if(hit is >=1 and <=7) session.Action("InRow"+(hit-1),true);
+                else if(hit is >=1 and <=7 && !session.ShockerPage) session.Action("InRow"+(hit-1),true);
                 else if(ToyControlLayout.Action(hit) is { } action) session.Action(action,true);
                 held=hand;
             }

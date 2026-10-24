@@ -45,7 +45,7 @@ internal static class ToyControlLabels
         }
         if(session.ShockerPage)
         {
-            Text("SHOCKERS",43,124,17,white,true); Text("Choose one shocker",43,151,12,faint);
+            Text("SHOCKERS",43,124,17,white,true); Text($"Choose shockers · {model.SelectedCount} selected",43,151,12,faint);
             for(var i=0;i<model.Visible.Count();i++)
             {
                 var row=model.Visible.ElementAt(i); var y=244+i*64;

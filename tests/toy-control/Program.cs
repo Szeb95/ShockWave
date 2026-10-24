@@ -24,7 +24,8 @@ internal static class Program
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false); artifacts=args.FirstOrDefault(a=>!a.StartsWith("--")) ?? Path.Combine(AppContext.BaseDirectory,"checks"); Directory.CreateDirectory(artifacts);
         try
         {
-            LatchedRecord(); Leases(); HeldRenewals(); ZeroCrossings(); OwnerEditDuringZero(); FailedZero(); SixFunctions(); Session(); RowContacts(); LateStartup(); Projection(); Pointer(); Udp(); Heartbeats(); ClearFeedback(); Graphics(args.Contains("--warp")); Design(args.Contains("--warp")); Navigation();
+            if(!args.Contains("--shockers"))
+            { LatchedRecord(); Leases(); HeldRenewals(); ZeroCrossings(); OwnerEditDuringZero(); FailedZero(); SixFunctions(); Session(); RowContacts(); LateStartup(); Projection(); Pointer(); Udp(); Heartbeats(); ClearFeedback(); Graphics(args.Contains("--warp")); Design(args.Contains("--warp")); Navigation(); }
             ShockerControlChecks.Run(Check,artifacts,args.Contains("--warp"));
             File.WriteAllText(Path.Combine(artifacts,"report.json"),JsonSerializer.Serialize(new { Passed=passed, PhysicalOutput=false, NativeLibraryLoaded=false, VrChatClient=false }));
             Console.WriteLine($"Toy control: {passed} checks passed"); return 0;

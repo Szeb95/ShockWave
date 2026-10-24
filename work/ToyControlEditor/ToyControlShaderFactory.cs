@@ -112,7 +112,7 @@ namespace ShockWave.ToyControl
         private static Texture2D ShockerLabels(string folder)
         {
             var t=Blank(1240*TextScale,800*TextScale); var white=new Color(242/255f,243/255f,245/255f); var faint=new Color(181/255f,186/255f,193/255f);
-            Text(t,"SHOCKERS",43,124,17,white,FontStyle.Bold); Text(t,"Choose one shocker",43,151,12,faint);
+            Text(t,"SHOCKERS",43,124,17,white,FontStyle.Bold); Text(t,"Choose shockers to control together",43,151,12,faint);
             Text(t,"Shocker control",368,178,22,white,FontStyle.Bold);
             Centered(t,"Toys",new Rect(1052,127,152,42),16,white,FontStyle.Bold);
             Centered(t,"Touch",new Rect(658,127,130,42),14,white,FontStyle.Bold); Centered(t,"Pointer",new Rect(658,758,130,42),14,white,FontStyle.Bold);

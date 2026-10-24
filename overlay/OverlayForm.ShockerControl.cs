@@ -16,11 +16,13 @@ internal sealed partial class OverlayForm
             new ShockerControlSession.Target("remote/"+s.Id,"Remote "+s.Name,s.Service,true,s.Maximum,s.DurationMs,true)) : [];
         return local.Concat(remote).ToArray();
     }
-    private bool SendPanelShocker(ShockerControlSession.Target target,string type,int percent,int durationMs)
+    private bool SendPanelShocker(ShockerControlSession.Target target,string type,int percent,int durationMs,long createdAt)
     {
+        var age=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()-createdAt;
+        if(age is <0 or >=250) return false;
         if(target.Remote)
         {
-            var sent=remoteSession.SendShock(target.Id[7..],type,percent,durationMs);
+            var sent=remoteSession.SendShock(target.Id[7..],type,percent,durationMs,createdAt);
             if(sent) AppendLog("info",$"Shocker panel: {target.Name} · {type} · {percent}% · {durationMs/1000d:0.0}s submitted once to remote app");
             return sent;
         }
@@ -32,7 +34,7 @@ internal sealed partial class OverlayForm
             // A discrete, expiring owner command. Existing bridge limits, pause,
             // cooldown, Test mode and no-replay behavior remain authoritative.
             bridge.StandardInput.WriteLine(JsonSerializer.Serialize(new { kind="panelControl",key,type,intensity=percent,durationMs,
-                expiresAt=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()+250 }));
+                expiresAt=createdAt+250 }));
             AppendLog("info",$"Shocker panel: {target.Name} · {type} · {percent}% · {durationMs/1000d:0.0}s submitted once");
             return true;
         }

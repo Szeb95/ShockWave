@@ -8,23 +8,28 @@ internal sealed class ShockerControlSession
 {
     internal sealed record Target(string Id, string Name, string Service, bool Available, int Maximum, int DurationMs, bool Remote, string Context="");
     public Func<IReadOnlyList<Target>> Inventory { get; set; } = () => [];
-    public Func<Target,string,int,int,bool> Send { get; set; } = (_,_,_,_) => false;
+    public Func<Target,string,int,int,long,bool> Send { get; set; } = (_,_,_,_,_) => false;
     public PanelModel Model { get; } = new() { AdaptivePaging = true };
     private Target[] targets = [];
     private readonly HashSet<int> held = [];
-    private string signature = "", selected = "", armedTarget = "";
+    private readonly HashSet<string> selected = new(StringComparer.Ordinal);
+    private Target[] armedTargets = [];
+    private string signature = "";
     private double deadline;
+    private long commandEpoch;
     private int armSource;
     private bool released;
     public int Intensity { get; private set; }
     public int DurationMs { get; private set; } = 300;
-    public bool Armed => armedTarget.Length > 0;
+    public bool Armed => armedTargets.Length > 0;
     public bool ArmedFromVrc => Armed && armSource!=0;
     public float Remaining(double now) => Armed ? (float)Math.Clamp((deadline-now)/3,0,1) : 0;
     public int Revision { get; private set; }
-    public string Notice { get; private set; } = "Choose a shocker · set intensity and duration";
-    public Target? Selected => targets.FirstOrDefault(t => t.Id == selected);
-    public bool Ready => Selected is { Available:true,Maximum:>0,DurationMs:>=300 } && Intensity > 0;
+    public string Notice { get; private set; } = "Choose shockers · set intensity and duration";
+    public Target[] Selected => targets.Where(t => selected.Contains(t.Id)).ToArray();
+    public bool Ready => selected.Count > 0 && Selected.All(t => t is { Available:true,Maximum:>0,DurationMs:>=300 }) && Intensity > 0;
+    private string SelectionNotice => selected.Count == 0 ? "Choose shockers · set intensity and duration"
+        : $"{selected.Count} shocker{(selected.Count == 1 ? "" : "s")} selected · set intensity and duration";
     public void Tick(double now)
     {
         static string Label(string value) { var clean=new string(value.Where(c=>!char.IsControl(c)).Take(96).ToArray()); return string.IsNullOrWhiteSpace(clean) ? "Shocker" : clean; }
@@ -34,22 +39,26 @@ internal sealed class ShockerControlSession
         {
             Cancel(); targets=next; signature=nextSignature;
             Model.ReplaceInventory(next.Select(t => new ToyUpdate(t.Id,t.Name,t.Available,-1,null,[new("control",t.Service)])).ToArray());
-            foreach(var f in Model.Functions) f.Function.Selected=f.Toy.Id==selected && f.Connected;
-            if(Selected is not { Available:true }) selected="";
+            selected.IntersectWith(next.Where(t=>t.Available).Select(t=>t.Id));
+            SyncSelection(); Notice=SelectionNotice;
             Revision++;
         }
         Model.AdvanceTo(now);
         if(Armed && now>=deadline) { Cancel(); Notice="Confirmation expired · start with the right circle"; }
     }
-    public void Cancel() { if(Armed) Revision++; armedTarget=""; released=false; }
+    public void Cancel() { commandEpoch++; if(Armed) Revision++; armedTargets=[]; released=false; }
     public void ResetInput() { Cancel(); held.Clear(); }
     public void Select(int row)
     {
         Cancel(); var item=Model.Visible.ElementAtOrDefault(row);
-        selected=item is { Connected:true } ? item.Toy.Id : "";
-        foreach(var f in Model.Functions) f.Function.Selected=f.Toy.Id==selected;
-        Notice=Selected is { } target ? target.Name+" · set intensity and duration" : "Shocker unavailable";
+        if(item is not { Connected:true }) { Notice="Shocker unavailable"; Revision++; return; }
+        if(!selected.Add(item.Toy.Id)) selected.Remove(item.Toy.Id);
+        SyncSelection(); Notice=SelectionNotice;
         Revision++;
+    }
+    private void SyncSelection()
+    {
+        foreach(var f in Model.Functions) f.Function.Selected=selected.Contains(f.Toy.Id) && f.Connected;
     }
     public void SetSlider(int hit, float value)
     {
@@ -67,23 +76,34 @@ internal sealed class ShockerControlSession
         if(hit==32)
         {
             if(Armed || !Ready) return;
-            armedTarget=selected; armSource=source; deadline=now+3; released=false; Revision++;
+            armedTargets=Selected; armSource=source; deadline=now+3; released=false; Revision++;
             Notice="Release, then press the LEFT green circle within 3 seconds"; return;
         }
         if(hit==33)
         {
-            var allowed=Armed && released && now<deadline && armedTarget==selected && Ready;
+            var allowed=Armed && released && now<deadline && armedTargets.SequenceEqual(Selected) && Ready;
             Cancel(); if(allowed) Submit("Shock"); return;
         }
         if(hit is 34 or 35) { Cancel(); Submit(hit==34 ? "Vibrate" : "Sound"); }
     }
     private void Submit(string type)
     {
-        if(!Ready || Selected is not { } target) { Notice="Choose an available shocker and an intensity above 0%"; return; }
-        // Absolute caps, never multiplication: request 80%, maximum 40% => 40%.
-        var percent=Math.Min(Intensity,target.Maximum); var duration=Math.Min(DurationMs,target.DurationMs);
-        Notice=percent>0 && duration>=300 && Send(target,type,percent,duration)
-            ? $"{type} submitted once · {percent}% · {duration/1000d:0.0}s" : "Command not submitted · check connection / Test mode";
+        if(!Ready) { Notice="Choose available shockers with usable limits and an intensity above 0%"; return; }
+        var group=Selected; var intensity=Intensity; var durationMs=DurationMs; var epoch=commandEpoch;
+        var createdAt=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(); var started=System.Diagnostics.Stopwatch.GetTimestamp();
+        var submitted=0;
+        foreach(var target in group)
+        {
+            // One immediate attempt per selected target. A slow callback cannot
+            // renew the original action, alter its values or add a new target.
+            if(commandEpoch!=epoch || System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds>=250 ||
+                !Ready || Intensity!=intensity || DurationMs!=durationMs || !group.SequenceEqual(Selected)) break;
+            // Absolute caps, never multiplication: request 80%, maximum 40% => 40%.
+            var percent=Math.Min(intensity,target.Maximum); var duration=Math.Min(durationMs,target.DurationMs);
+            if(Send(target,type,percent,duration,createdAt)) submitted++;
+        }
+        Notice=submitted==group.Length ? $"{type} submitted once to {submitted} shocker{(submitted==1 ? "" : "s")} · individual limits apply"
+            : $"{type} submitted to {submitted} of {group.Length} shockers · not retried; check connection / Test mode";
         Revision++;
     }
 }

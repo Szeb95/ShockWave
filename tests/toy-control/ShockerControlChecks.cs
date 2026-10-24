@@ -15,7 +15,7 @@ internal static class ShockerControlChecks
         var inventory=new[] { target,remote };
         var output=new List<(string Id,string Type,int Percent,int Duration)>();
         var s=session.Shockers; s.Inventory=()=>inventory;
-        s.Send=(t,type,p,d)=> { output.Add((t.Id,type,p,d)); return true; };
+        s.Send=(t,type,p,d,_)=> { output.Add((t.Id,type,p,d)); return true; };
         var now=ToyOscRouter.Clock; session.Tick(now); session.SetPage(true); s.Select(0);
         s.SetSlider(30,.8f); s.SetSlider(31,1);
         check(output.Count==0 && s.Intensity==80 && s.DurationMs==15000,"shocker sliders change values without submitting commands");
@@ -36,7 +36,10 @@ internal static class ShockerControlChecks
         s.Press(0,32,now); s.Release(0); s.SetSlider(31,.4f); s.Press(0,33,now+.1); s.Release(0);
         check(output.Count==1,"changing duration cancels a pending confirmation");
         s.Press(0,32,now); s.Release(0); s.Select(1); s.Press(0,33,now+.1); s.Release(0);
-        check(output.Count==1 && s.Selected?.Id==remote.Id && s.Model.SelectedCount==1,"changing shocker cancels confirmation and keeps exactly one selection");
+        check(output.Count==1 && s.Selected.Select(t=>t.Id).ToHashSet().SetEquals([target.Id,remote.Id]) && s.Model.SelectedCount==2,
+            "adding a shocker cancels confirmation and preserves the first selection");
+        s.Select(0);
+        check(s.Selected.Single().Id==remote.Id && s.Model.SelectedCount==1,"tapping a selected shocker deselects only that row");
         s.Press(0,34,now); s.Release(0); s.Press(0,35,now); s.Release(0);
         check(output.Count==3 && output[1].Type=="Vibrate" && output[2].Type=="Sound" && output[1].Id==remote.Id,"Vibrate and Sound use the selected remote target and absolute owner caps");
         s.Press(0,32,now); s.Release(0); session.SetPage(false); session.SetPage(true); s.Press(0,33,now+.1); s.Release(0);
@@ -54,7 +57,7 @@ internal static class ShockerControlChecks
         check(output.Count==4,"either hand can make the fresh second press after both release");
 
         // Drive real production OSC parsing and page-aware hit testing, no UDP or hardware.
-        session.Action("InInputMode",false); s.Select(0);
+        session.Action("InInputMode",false);
         void Put(string name,object value)=>session.Vrc.Apply(new("/avatar/parameters/"+ToyControlContract.Prefix+name,[value]),now);
         Put("Visible",true); Put("InBeat",true); session.Tick(now);
         void Touch(float x,float y,bool down)
@@ -121,7 +124,7 @@ internal static class ShockerControlChecks
         // Follow avatar OSC through the shared session with a remote selected target.
         // The callback records the command only; no provider or hardware is contacted.
         session.Vrc.Reset();if(session.PointerMode) session.Action("InInputMode",false);
-        session.SetPage(true);now+=.1;s.Select(1);s.SetSlider(30,.8f);s.SetSlider(31,1);
+        session.SetPage(true);now+=.1;s.Select(0);s.Select(1);s.SetSlider(30,.8f);s.SetSlider(31,1);
         Put("Visible",true);Put("InBeat",true);Put("InShockerReady",true);session.Tick(now);
         var remoteBefore=output.Count;
         Touch(1088,308,false);Touch(1088,308,true);Touch(1088,308,false);
@@ -133,5 +136,104 @@ internal static class ShockerControlChecks
         Point("L",878,true);Point("L",878,false);
         check(output.Count==remoteBefore+1 && output[^1]==(remote.Id,"Shock",40,2000),
             "in-game pointer confirmation routes one remote shock with the advertised owner caps");
+
+        Multiple(check,artifacts,warp);
+    }
+
+    private static void Multiple(Action<bool,string> check,string artifacts,bool warp)
+    {
+        using var session=new ToyControlSession(()=>null,()=>null);
+        var first=new ShockerControlSession.Target("first","Left shocker","OpenShock",true,40,2000,false);
+        var second=first with {Id="remote/second",Name="Remote Right",Remote=true,Maximum=65,DurationMs=500};
+        var inventory=new[] {first,second}; var s=session.Shockers;
+        s.Inventory=()=>inventory;
+        var output=new List<(string Id,string Type,int Percent,int Duration,long Created)>();
+        s.Send=(t,type,p,d,created)=>{output.Add((t.Id,type,p,d,created));return true;};
+        var now=ToyOscRouter.Clock; session.Tick(now); session.SetPage(true);
+        s.Press(0,1,now);s.Release(0);s.Press(0,2,now);s.Release(0);
+        s.SetSlider(30,.8f);s.SetSlider(31,1);
+        check(s.Selected.Length==2 && s.Model.SelectedCount==2 && output.Count==0,"row presses select multiple shockers without output");
+        var frame=new VrFeedback().Frame(s.Model,true);
+        check(frame["Selected"]==2/256f && frame[ToyControlContract.Row(0,"State")]==frame[ToyControlContract.Row(1,"State")],
+            "existing avatar feedback marks both selected shocker rows without new parameters");
+        foreach(var hit in new[] {34,35}) {s.Press(0,hit,now);s.Release(0);}
+        check(output.Count==4 && output[0].Percent==40 && output[0].Duration==2000 && output[1].Percent==65 && output[1].Duration==500 &&
+            output.Select(o=>o.Type).SequenceEqual(["Vibrate","Vibrate","Sound","Sound"]) && output[0].Created==output[1].Created,
+            "Vibrate and Sound submit once per selected local/remote shocker with separate absolute caps and a shared creation time");
+        s.Press(0,32,now);s.Press(0,33,now+.1);
+        check(s.Armed && output.Count==4,"group arming and held dragging send no commands");
+        s.Release(0);s.Press(0,33,now+.2);s.Release(0);
+        check(output.Count==6 && output.TakeLast(2).All(o=>o.Type=="Shock") && !s.Armed,"one fresh confirmation submits exactly once to each armed shocker");
+        s.Press(0,33,now+.3);s.Release(0);s.Tick(now+=.4);
+        check(output.Count==6,"completed group confirmation is not replayed by clicking or ticking");
+        s.Press(0,32,now);s.Release(0);s.Select(1);s.Press(0,33,now+.1);s.Release(0);
+        check(output.Count==6 && s.Selected.Single().Id==first.Id && !s.Armed,"removing one target cancels the armed group");
+        s.Select(1);s.Press(0,32,now);s.Release(0);
+        inventory=[first,second with {Maximum=30}];s.Tick(now);s.Press(0,33,now+.1);s.Release(0);
+        check(output.Count==6 && !s.Armed && s.Selected.Length==2,"changing a group member's limits cancels confirmation while retaining selection");
+        s.Press(0,32,now);s.Release(0);inventory=[first,second with {Available=false}];s.Tick(now);
+        s.Press(0,33,now+.1);s.Release(0);
+        check(output.Count==6 && s.Selected.Single().Id==first.Id,"disconnect drops only the unavailable selection and cancels the whole arm");
+        inventory=[first,second];s.Tick(now);
+        check(s.Selected.Single().Id==first.Id && output.Count==6,"returning shocker starts deselected with no automatic command");
+        s.Select(1);s.Select(0);s.Select(1);s.Press(0,34,now);s.Release(0);s.Press(0,32,now);s.Release(0);
+        check(s.Selected.Length==0 && !s.Ready && !s.Armed && output.Count==6,"deselecting every shocker blocks commands and arming");
+        s.Select(0);s.Select(1);inventory=[first,second with {Maximum=0}];s.Tick(now);
+        s.Press(0,32,now);s.Release(0);s.Press(0,34,now);s.Release(0);
+        check(output.Count==6 && !s.Ready && !s.Armed,"a selected zero-cap shocker blocks the group until its usable limits or selection change");
+
+        inventory=Enumerable.Range(0,9).Select(i=>first with {Id="paged"+i,Name="Shocker "+(i+1)}).ToArray();s.Tick(now);s.Select(0);
+        session.Action("InNext",false);s.Select(0);
+        check(s.Selected.Select(t=>t.Id).ToHashSet().SetEquals(["paged0","paged6"]),"selection is independent across shocker list pages");
+        session.Action("InPrev",false);s.Select(0);
+        check(s.Selected.Single().Id=="paged6","deselecting on one page preserves selections on another page");
+        inventory=[first,second];s.Tick(now);s.Select(0);s.Select(1);
+        s.Send=(t,type,p,d,created)=>{output.Add((t.Id,type,p,d,created));return t.Id!=first.Id;};
+        var before=output.Count;s.Press(0,34,now);s.Release(0);s.Tick(now+=.1);
+        check(output.Count==before+2 && s.Notice.Contains("1 of 2") && s.Notice.Contains("not retried"),"partial submission is reported and failed members are never retried");
+        s.Send=(t,type,p,d,created)=>{output.Add((t.Id,type,p,d,created));s.Cancel();return true;};
+        before=output.Count;s.Press(0,34,now);s.Release(0);
+        check(output.Count==before+1,"Stop or cancellation during fan-out prevents remaining submissions");
+        s.Send=(t,type,p,d,created)=>{output.Add((t.Id,type,p,d,created));Thread.Sleep(300);return true;};
+        before=output.Count;s.Press(0,34,now);s.Release(0);s.Tick(now+=.1);
+        check(output.Count==before+1 && s.Notice.Contains("1 of 2"),"slow submission expires the shared group deadline without sending a delayed second command");
+        s.Send=(t,type,p,d,created)=>{output.Add((t.Id,type,p,d,created));return true;};
+
+        // Both real pointer paths formerly selected twice. Independent toggles
+        // must run exactly once, including re-clicking a selected row.
+        session.Vrc.Reset();session.Action("InInputMode",false);
+        void Put(string name,object value)=>session.Vrc.Apply(new("/avatar/parameters/"+ToyControlContract.Prefix+name,[value]),now);
+        Put("Visible",true);Put("InBeat",true);Put("InShockerReady",true);session.Tick(now);
+        void Point(string hand,float y,bool down) {PoseInput.Aim(Put,hand,150,y);Put("InPointer"+hand+"Press",down);session.Tick(now);}
+        foreach(var hand in new[] {"L","R"})
+        {
+            Point(hand,270,false);Point(hand,270,true);Point(hand,270,false);
+            check(s.Selected.Length==1 && s.Selected[0].Id==second.Id,hand+" pointer deselects its row exactly once without changing its neighbor");
+            Point(hand,270,true);Point(hand,270,false);
+            check(s.Selected.Length==2,hand+" pointer reselects one row exactly once");
+        }
+        session.Action("InInputMode",false);
+        Put("InRow0",true);session.Tick(now);Put("InRow1",true);session.Tick(now);
+        check(s.Selected.Length==1 && s.Selected[0].Id==second.Id,"finger selection toggles one shocker and rejects a neighboring contact during the same touch");
+        Put("InRow0",false);Put("InRow1",false);session.Tick(now);now+=.21;session.Tick(now);
+        Put("InRow0",true);session.Tick(now);Put("InRow0",false);session.Tick(now);
+        check(s.Selected.Length==2,"finger rows can select multiple shockers with a fresh released touch");
+        void Touch(float x,bool down)
+        {Put("InPanelX",x/1240);Put("InPanelY",1-(308-100)/608f);Put("InPanelTouch",down);session.Tick(now);}
+        before=output.Count;Touch(1088,false);Touch(1088,true);Touch(1088,false);Touch(878,true);Touch(878,false);
+        check(output.Count==before+2 && output.TakeLast(2).All(o=>o.Type=="Shock"),"one released VR surface confirmation submits once to both selected shockers");
+        session.Action("InInputMode",false);
+        foreach(var hand in new[] {"L","R"})
+        {
+            void Aim(float x,bool down) {PoseInput.Aim(Put,hand,x,308);Put("InPointer"+hand+"Press",down);session.Tick(now);}
+            before=output.Count;Aim(1088,false);Aim(1088,true);Aim(1088,false);Aim(878,true);Aim(878,false);
+            check(output.Count==before+2 && output.TakeLast(2).All(o=>o.Type=="Shock"),hand+" pointer confirms one discrete command per selected shocker");
+        }
+        using var renderer=new GpuRenderer(Path.Combine(AppContext.BaseDirectory,"ToyControl","Shaders","Panel.hlsl"),1240,608,forceWarp:warp);
+        using var labels=ToyControlLabels.Create(session);renderer.UploadLabels(labels);
+        var state=ShaderState.From(s.Model,1240,608,(float)now,0,0);
+        state.ShockData=new(1,s.Intensity/100f,(s.DurationMs-300)/14700f,0);state.ShockFlags=new(0,s.Ready ? 1 : 0,0,0);
+        renderer.Render(state,false);using var image=renderer.Capture();image.Save(Path.Combine(artifacts,"shocker-multiple.png"));
+        check(renderer.CompileError is null,"multi-selected shocker desktop renders through production HLSL");
     }
 }

@@ -1,5 +1,9 @@
 # ShockWave overlay
 
+## Multiple shocker selection — local preview, 2026-10-24
+
+In **Shocker control**, click each shocker row to select it and click again to deselect it. Multiple local and Remote shockers remain selected across pages. Shared intensity/duration and Vibrate/Sound or a single right ARM → release → left SHOCK confirmation apply to all selected targets, each through its own caps, pause, cooldown and existing Test mode. Changing the selection cancels confirmation; disconnect removes unavailable selections without restoring them on reconnect. Submissions are individual attempts with the same original 250 ms expiry, never a delayed queue/retry. A partial submission is reported; software submission does not confirm physical output or simultaneous arrival. The existing uploaded v7 panel supports this with the updated EXE and needs no avatar update. This is a separate local preview, not a new stable release; see STATUS for its exact package and checks.
+
 ## Update page — 2026-10-21
 
 **Update**, below **Settings**, contains the current/latest version, **Update**, **Check for updates**, **Automatic update** and a link to the published version on GitHub. A compatible newer release shows **Update available** beside the Toy panel heading, linking to Update. Background checks run on normal startup and hourly; settings/tests that construct an isolated form do not start background checks. Missing public releases, offline checks and GitHub throttling have separate status text.

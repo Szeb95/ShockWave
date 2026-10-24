@@ -132,7 +132,7 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
         }
         Changed?.Invoke();
     }
-    private void Send(string type, object payload) => worker?.Send(new { kind = "send", type, payload, createdAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() });
+    private bool Send(string type, object payload, long? createdAt=null) => worker?.Send(new { kind = "send", type, payload, createdAt = createdAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }) ?? false;
     public void Tick()
     {
         if (worker is null) return;
@@ -298,10 +298,13 @@ internal sealed class RemoteSession(Func<ToyAdapterSnapshot?> inventory, Func<Lo
             shock(key, mode, intensity, duration, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + (long)remainingMs); // One submission, never retried or replayed.
         }
     }
-    internal bool SendShock(string id, string type, int percent, int durationMs)
+    internal bool SendShock(string id, string type, int percent, int durationMs, long? createdAt=null)
     {
         if (!Connected || config().DryRun || !Shockers.Any(s => s.Id == id) || type is not ("Shock" or "Vibrate" or "Sound") || percent is < 1 or > 100 || durationMs is < 1 or > 15000) return false;
-        Send("shock", new { commandId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(), device = id, type, percent, durationMs }); return true;
+        var timestamp=createdAt ?? DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var age=DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()-timestamp;
+        if(age is <0 or >=250) return false;
+        return Send("shock", new { commandId = Convert.ToHexString(RandomNumberGenerator.GetBytes(16)).ToLowerInvariant(), device = id, type, percent, durationMs },timestamp);
     }
     private void Reject(RemoteLevel value, string reason, OwnedLease? previous = null, double remainingMs = 0)
     {

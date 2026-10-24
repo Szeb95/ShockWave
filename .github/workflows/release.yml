@@ -6,7 +6,7 @@ on:
       version:
         description: Numeric release version
         required: true
-        default: '0.7.10'
+        default: '0.7.11'
 
 permissions:
   contents: read
