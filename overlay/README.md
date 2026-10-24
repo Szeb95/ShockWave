@@ -1,8 +1,8 @@
 # ShockWave overlay
 
-## Multiple shocker selection — local preview, 2026-10-24
+## Multiple shocker selection — Windows 0.7.11, 2026-10-24
 
-In **Shocker control**, click each shocker row to select it and click again to deselect it. Multiple local and Remote shockers remain selected across pages. Shared intensity/duration and Vibrate/Sound or a single right ARM → release → left SHOCK confirmation apply to all selected targets, each through its own caps, pause, cooldown and existing Test mode. Changing the selection cancels confirmation; disconnect removes unavailable selections without restoring them on reconnect. Submissions are individual attempts with the same original 250 ms expiry, never a delayed queue/retry. A partial submission is reported; software submission does not confirm physical output or simultaneous arrival. The existing uploaded v7 panel supports this with the updated EXE and needs no avatar update. This is a separate local preview, not a new stable release; see STATUS for its exact package and checks.
+In **Shocker control**, click each shocker row to select it and click again to deselect it. Multiple local and Remote shockers remain selected across pages. Shared intensity/duration and Vibrate/Sound or a single right ARM → release → left SHOCK confirmation apply to all selected targets, each through its own caps, pause, cooldown and existing Test mode. Changing the selection cancels confirmation; disconnect removes unavailable selections without restoring them on reconnect. Submissions are individual attempts with the same original 250 ms expiry, never a delayed queue/retry. A partial submission is reported; software submission does not confirm physical output or simultaneous arrival. The existing uploaded v7 panel supports this with the updated EXE and needs no avatar update. Published in [ShockWave 0.7.11](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.11); see STATUS for its exact package and checks.
 
 ## Update page — 2026-10-21
 
