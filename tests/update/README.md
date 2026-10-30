@@ -21,4 +21,4 @@ Verify the actual single-file helper against a fake installation:
 ./tests/update/bin/Release/net8.0-windows/Update.Checks.exe --published-helper ./overlay/dist/ShockWave-0.7.8-win-x64/ShockWave.exe
 ```
 
-The published-helper fixture uses numeric 0.7.7/0.7.8 manifests. It copies the real packaged EXE, invokes only `--apply-update`, and never requests a normal-app restart. It does not touch an installed app or personal data. For a later release, update the fixture's version pair explicitly.
+The fixtures use 0.7.7 as the old installation and derive the target version from the compiled application. The wrong-version case chooses a distinct version relative to that target. The published-helper fixture copies the real packaged EXE, invokes only `--apply-update`, and never requests a normal-app restart. It does not touch an installed app or personal data.

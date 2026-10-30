@@ -6,11 +6,11 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ShockWave</AssemblyName>
-    <Version>0.7.11</Version>
+    <Version>0.8.0</Version>
     <RootNamespace>ShockWave.Overlay</RootNamespace>
     <Product>ShockWave</Product>
     <Title>ShockWave</Title>
-    <Description>Windows toy controls with VRChat OSC and OpenShock integration</Description>
+    <Description>Desktop and integrated SteamVR toy controls with VRChat OSC and OpenShock integration</Description>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <SelfContained>false</SelfContained>
     <PublishSingleFile>true</PublishSingleFile>
@@ -19,12 +19,18 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);dist/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="SteamVr/app.vrmanifest" Link="app.vrmanifest" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/vendor/openvr_api.dll" Link="openvr_api.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/vendor/LICENSE-OpenVR.txt" Link="licenses/LICENSE-OpenVR.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/vendor/version.json" Link="openvr-version.json" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/bindings/*.json" Link="bindings/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../LICENSE" Link="LICENSE" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../THIRD-PARTY.md" Link="THIRD-PARTY.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/UPDATES.md" Link="UPDATES.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
-    <Content Include="ToyControl/Shaders/**/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/STEAMVR.md" Link="STEAMVR.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../work/ToyControlEditor/README.md" Link="TOY-CONTROL.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/lovense-remote/SPS.md" Link="SPS.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/lovense-remote/INTIFACE-PHONE.md" Link="INTIFACE-PHONE.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/PISHOCK.md" Link="PISHOCK.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/REMOTE.md" Link="REMOTE.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../work/ShaderPanelTest/THIRD-PARTY.txt" Link="ToyControl/THIRD-PARTY.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
@@ -34,6 +40,9 @@
     <Content Include="native\lovense\*.dll" Condition="'$(IncludeLegacyLovense)' != 'false'" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="native/buttplug/*" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="..\bridge\bridge.mjs" Link="bridge\bridge.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\bridge-config.mjs" Link="bridge\bridge-config.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\openshock-api.mjs" Link="bridge\openshock-api.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+    <Content Include="..\bridge\openshock-bridge.mjs" Link="bridge\openshock-bridge.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\pishock.mjs" Link="bridge\pishock.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\remote-peer.mjs" Link="bridge\remote-peer.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
     <Content Include="..\bridge\remote-friends.mjs" Link="bridge\remote-friends.mjs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />

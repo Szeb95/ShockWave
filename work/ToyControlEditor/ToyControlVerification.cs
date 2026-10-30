@@ -360,6 +360,10 @@ namespace ShockWave.ToyControl
                     foreach(var h in new[]{"L","R"}) animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+h+"Valid",1);
                     animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",6);Step();animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",7);Step();
                     check(animator.GetCurrentAnimatorStateInfo(free=="L" ? 6 : 7).IsName("Click / draw") && animator.GetCurrentAnimatorStateInfo(hand=="L" ? 6 : 7).IsName("Release before pointing"),"Only the free "+free+" hand can click/draw while holding with "+hand);
+                    animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",3);Step();
+                    check(animator.GetCurrentAnimatorStateInfo(free=="L" ? 6 : 7).IsName("Aim"),"Free "+free+" Finger Point releases while the other hand holds the panel");
+                    animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",1);Step();
+                    check(animator.GetCurrentAnimatorStateInfo(free=="L" ? 6 : 7).IsName("Click / draw") && animator.GetCurrentAnimatorStateInfo(hand=="L" ? 6 : 7).IsName("Release before pointing"),"Free "+free+" Fist clicks without turning the gripping "+hand+" Fist into a click");
                     animator.SetInteger(free=="L" ? "GestureLeft" : "GestureRight",0);
                 } else check(contacts.Find("InTouch").gameObject.activeInHierarchy,"Free finger drawing remains enabled while holding in Touch mode");
                 animator.SetInteger(gesture,0);Step();check(constraint.FreezeToWorld && At("Release touch guard") && !contacts.gameObject.activeSelf,"Releasing a world grip guards input until the hand leaves its strip");
@@ -419,7 +423,18 @@ namespace ShockWave.ToyControl
             foreach(var hand in new[]{"L","R"})
             {
                 var layer=hand=="L" ? 6 : 7;var visual=hand=="L" ? 8 : 9;var gesture=hand=="L" ? "GestureLeft" : "GestureRight";
-                check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Release before pointing"),hand+" held click must release when pointer mode starts");
+                check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Release before pointing"),hand+" held Thumbs Up must release when pointer mode starts");
+                animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",0);Step();animator.SetInteger(gesture,1);animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer",1);Step();
+                check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Release before pointing"),hand+" held Fist must release when pointer mode starts");
+                animator.SetInteger(gesture,3);Step();check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Aim"),hand+" Finger Point arms aiming without clicking");
+                animator.SetInteger(gesture,1);Step();check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Click / draw"),hand+" fresh Fist enters the existing click/draw state");
+                var heldTime=animator.GetCurrentAnimatorStateInfo(layer).normalizedTime;
+                animator.SetInteger(gesture,7);Step();check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Click / draw") && animator.GetCurrentAnimatorStateInfo(layer).normalizedTime>heldTime,hand+" Fist to Thumbs Up keeps the same state without a second press");
+                heldTime=animator.GetCurrentAnimatorStateInfo(layer).normalizedTime;
+                animator.SetInteger(gesture,1);Step();check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Click / draw") && animator.GetCurrentAnimatorStateInfo(layer).normalizedTime>heldTime,hand+" Thumbs Up to Fist keeps the same state without a second press");
+                animator.SetBool(ToyControlContract.Prefix+"AppReady",false);Step();animator.SetBool(ToyControlContract.Prefix+"AppReady",true);Step();
+                check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Release before pointing"),hand+" heartbeat recovery cannot replay a held Fist click");
+                animator.SetInteger(gesture,3);Step();check(animator.GetCurrentAnimatorStateInfo(layer).IsName("Aim"),hand+" Finger Point releases the held click after recovery");
                 var origin=pointer.Find(hand+"/Origin");var tip=origin.Find("Tip");
                 check(Mathf.Abs(tip.localPosition.z-.2f)<.00001f && tip.parent==origin,hand+" calibrated aim uses a rigid 20cm baseline");
                 var beam=pointer.Find(hand+"/Beam").GetComponent<SkinnedMeshRenderer>();var marker=hits.Find(hand+"/Marker").GetComponent<MeshRenderer>();
@@ -435,7 +450,7 @@ namespace ShockWave.ToyControl
                     VerifyBeamEndpoints(beam,origin,hits.Find(hand),check,hand+" analytic cursor");
                 }
                 var initialDirection=origin.forward;var index=pointer.Find(hand).GetComponent<VRCParentConstraint>().Sources[0].SourceTransform.Find(hand=="L" ? "Synthetic left index proximal" : "Synthetic right index proximal");
-                for(var pose=0;pose<8;pose++) {index.localRotation=Quaternion.Euler(pose*15,pose*4,pose*7);animator.SetInteger(gesture,pose);Step();check(Vector3.Dot(initialDirection,origin.forward)>.9999f && animator.GetCurrentAnimatorStateInfo(layer).IsName(pose==7 ? "Click / draw" : "Aim"),hand+" pose "+pose+" cannot steer the rigid aim; only Thumbs Up clicks");}
+                for(var pose=0;pose<8;pose++) {index.localRotation=Quaternion.Euler(pose*15,pose*4,pose*7);animator.SetInteger(gesture,pose);Step();check(Vector3.Dot(initialDirection,origin.forward)>.9999f && animator.GetCurrentAnimatorStateInfo(layer).IsName(pose==1 || pose==7 ? "Click / draw" : "Aim"),hand+" pose "+pose+" cannot steer the rigid aim; Fist and Thumbs Up click");}
                 index.localRotation=Quaternion.identity;
                 animator.SetFloat(ToyControlContract.ReceivePrefix+"Pointer"+hand+"Valid",0);Step();check(!marker.enabled && !beam.enabled,hand+" invalid/outside/grazing pointer hides both visuals");
             }

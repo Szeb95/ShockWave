@@ -15,6 +15,7 @@ internal static partial class Program
                 return LovenseWorkerHost.Run(() => new WorkerFixtureApi(args.ElementAtOrDefault(1) ?? "normal"));
             if (args.FirstOrDefault() == "--engine-owner-fixture") return EngineOwnerFixture(args[1]);
             ApplicationConfiguration.Initialize();
+            if (args.Contains("--intiface-checks")) { IntifaceChecks(); return 0; }
             if (args.Contains("--discovery-checks"))
             {
                 DiscoveryChecks();
@@ -59,6 +60,7 @@ internal static partial class Program
             Run("connection, battery, disconnect and no output", ConnectAndBattery);
             BatteryChecks();
             ButtplugChecks();
+            IntifaceChecks();
             Run("Bluetooth loss clears connection and battery", BluetoothLoss);
             Run("connection cancellation and timeout", ConnectionCancellation);
             Run("unconfirmed scan stop resets resources", StopTimeout);

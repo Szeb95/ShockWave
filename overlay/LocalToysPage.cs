@@ -6,6 +6,15 @@ namespace ShockWave.Overlay;
 internal sealed class LocalToysPage : UserControl
 {
     private readonly ComboBox source = new SettingChoiceInput() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 232 };
+    private readonly ComboBox phoneAddress = new SettingChoiceInput() { DropDownStyle = ComboBoxStyle.DropDown, MaxLength = 2048,
+        AccessibleName = "Intiface phone server address" };
+    private readonly Button findPhone = Button("Find phone"), connectPhone = Button("Connect phone");
+    private readonly Panel phoneOptions = new() { Height = 160 };
+    private readonly Label phoneHelp = new() { AutoSize = false, Text = "Open Intiface on your phone and start its server. Both devices need the same home network.\nFor Find phone, enable Broadcast Server Info via mDNS in Intiface's advanced settings.", ForeColor = Color.FromArgb(181, 186, 193) };
+    private readonly IntifaceConnectionSettings phoneSettings;
+    private bool findingPhone;
+    private string? phoneSaveError;
+    private readonly Func<CancellationToken, Task<IReadOnlyList<IntifaceServer>>> findServers;
     private readonly NumericUpDown updateRate = new SettingNumberInput() { ShowSpinner = false, BorderStyle = BorderStyle.None,
         Minimum = 1, Maximum = 10, Value = 5, Width = 52,
         AccessibleName = "Bluetooth updates per toy per second" };
@@ -49,6 +58,11 @@ internal sealed class LocalToysPage : UserControl
     public Button StopAllButton => stopAll;
     public Button CancelButton => cancel;
     public Label OperationStatus => status;
+    public Panel PhoneOptions => phoneOptions;
+    public ComboBox PhoneAddressInput => phoneAddress;
+    public Button FindPhoneButton => findPhone;
+    public Button ConnectPhoneButton => connectPhone;
+    public bool PhoneSource => source.SelectedIndex == 4;
 
     private Task OnUiAsync(Action action)
     {
@@ -67,14 +81,31 @@ internal sealed class LocalToysPage : UserControl
         return completion.Task;
     }
 
-    public LocalToysPage(Func<int, IRememberedToyAdapter>? createAdapter = null)
+    public LocalToysPage(Func<int, IRememberedToyAdapter>? createAdapter = null, IntifaceConnectionSettings? phoneSettings = null,
+        Func<CancellationToken, Task<IReadOnlyList<IntifaceServer>>>? findServers = null)
     {
         this.createAdapter = createAdapter;
+        this.findServers = findServers ?? (token => IntifaceDiscovery.FindAsync(token));
+        this.phoneSettings = phoneSettings ?? new(createAdapter is null ? Path.Combine(Path.GetDirectoryName(BridgeConfig.ConfigPath)!, "intiface-phone.json") : null);
+        this.phoneSettings.Load();
         Dock = DockStyle.Fill; Margin = Padding.Empty; BackColor = Color.FromArgb(30, 31, 34);
         ForeColor = Color.FromArgb(242, 243, 245);
         Controls.Add(empty);
-        source.Items.AddRange(["Bluetooth toys (Buttplug)", "Simulated toys", "Simulated Bluetooth off", "Lovense Bluetooth (legacy)"]);
-        source.SelectedIndex = 0;
+        source.Items.AddRange(["Bluetooth toys (Buttplug)", "Simulated toys", "Simulated Bluetooth off", "Lovense Bluetooth (legacy)", "Intiface / phone"]);
+        source.SelectedIndex = this.phoneSettings.Value.Enabled ? 4 : 0;
+        phoneAddress.Text = this.phoneSettings.Value.Address;
+        phoneAddress.BackColor = Color.FromArgb(56, 58, 64); phoneAddress.ForeColor = ForeColor;
+        var phoneLabel = new Label { Text = "Phone server address", ForeColor = ForeColor, AutoSize = true };
+        phoneOptions.Controls.AddRange([phoneLabel, phoneAddress, findPhone, connectPhone, phoneHelp]);
+        phoneOptions.Resize += (_, _) =>
+        {
+            phoneLabel.SetBounds(0, 0, Math.Max(120, phoneOptions.Width), 20);
+            phoneAddress.SetBounds(0, 22, Math.Max(120, phoneOptions.Width), 30);
+            findPhone.SetBounds(0, 60, 120, 32); connectPhone.SetBounds(130, 60, 140, 32);
+            phoneHelp.SetBounds(0, 99, Math.Max(120, phoneOptions.Width), 60);
+        };
+        findPhone.Click += async (_, _) => await FindPhoneAsync();
+        connectPhone.Click += (_, _) => ApplyPhone();
         source.BackColor = updateRate.BackColor = Color.FromArgb(56, 58, 64);
         source.ForeColor = updateRate.ForeColor = ForeColor;
         source.DrawMode = DrawMode.OwnerDrawFixed; source.ItemHeight = 24;
@@ -87,7 +118,13 @@ internal sealed class LocalToysPage : UserControl
                 TextFormatFlags.Left | TextFormatFlags.VerticalCenter);
             args.DrawFocusRectangle();
         };
-        source.SelectedIndexChanged += (_, _) => StartOperation(RecreateAdapterAsync);
+        source.SelectedIndexChanged += (_, _) =>
+        {
+            if (busy || shuttingDown) return;
+            try { if (this.phoneSettings.Value.Enabled != PhoneSource) this.phoneSettings.Save(this.phoneSettings.Value with { Enabled = PhoneSource }); phoneSaveError = null; }
+            catch (InvalidOperationException error) { phoneSaveError = error.Message; }
+            StartOperation(RecreateAdapterAsync);
+        };
         resetBluetooth.Click += (_, _) => ResetBluetooth();
         stopAll.Click += (_, _) => ControlAction(() => controller?.Stop());
         cancel.Click += (_, _) =>
@@ -109,6 +146,44 @@ internal sealed class LocalToysPage : UserControl
     }
 
     public void StartRememberedConnections() => StartOperation(EnsureAdapterAsync);
+    private async Task FindPhoneAsync()
+    {
+        if (busy || findingPhone || shuttingDown || !PhoneSource) return;
+        findingPhone = true; phoneHelp.Text = "Looking for Intiface on your home network…"; RefreshInventory();
+        try
+        {
+            var servers = await findServers(lifetime.Token);
+            if (shuttingDown || IsDisposed) return;
+            phoneAddress.Items.Clear();
+            foreach (var server in servers) phoneAddress.Items.Add(server);
+            if (servers.Count == 1) phoneAddress.SelectedIndex = 0;
+            else if (servers.Count > 1) phoneAddress.DroppedDown = true;
+            phoneHelp.Text = servers.Count > 0 ? "Choose your phone, then Connect phone. The connection is saved and reconnects automatically."
+                : "No phone found. Start Intiface's server and enable Broadcast Server Info via mDNS, or enter the address it displays.";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception) { phoneHelp.Text = "Phone discovery is unavailable. Enter the server address shown in Intiface, then Connect phone."; }
+        finally { findingPhone = false; if (!shuttingDown && !IsDisposed) RefreshInventory(); }
+    }
+    private void ApplyPhone()
+    {
+        if (busy || findingPhone || shuttingDown || !PhoneSource) return;
+        try
+        {
+            var chosen = phoneAddress.SelectedItem as IntifaceServer;
+            var address = chosen?.Address ?? IntifaceConnectionSettings.ParseAddress(phoneAddress.Text);
+            var previous = phoneSettings.Value;
+            var samePhone = previous.Address == address.AbsoluteUri || chosen is not null &&
+                previous.DiscoveryHost.Equals(chosen.Host, StringComparison.OrdinalIgnoreCase) &&
+                IntifaceConnectionSettings.ParseAddress(previous.Address).Port == address.Port;
+            phoneSettings.Save(new(true, address.AbsoluteUri, samePhone ? previous.Scope : Guid.NewGuid().ToString("N"), chosen?.Host ?? (samePhone ? previous.DiscoveryHost : "")));
+            phoneSaveError = null;
+            phoneAddress.Text = address.AbsoluteUri;
+            phoneHelp.Text = "Saved · connects automatically when Intiface is available. Give toys unique Intiface nicknames to retain settings and SPS mappings.";
+            StartOperation(RecreateAdapterAsync);
+        }
+        catch (InvalidOperationException error) { operationError = error.Message; RefreshInventory(); }
+    }
     public void ResetBluetooth() => StartOperation(RecreateAdapterAsync);
     public void SetTestMode(bool enabled) { testMode = enabled; controller?.SetTestMode(enabled); RefreshInventory(); }
     public void ToggleScan()
@@ -163,7 +238,9 @@ internal sealed class LocalToysPage : UserControl
         var simulation = selectedSource is 1 or 2;
         var missingBluetooth = selectedSource == 2;
         var keyPath = Path.Combine(Path.GetDirectoryName(BridgeConfig.ConfigPath)!, "local-toy-key.bin");
-        adapter = createAdapter?.Invoke(selectedSource) ?? new RememberedToyAdapter(selectedSource == 0
+        adapter = createAdapter?.Invoke(selectedSource) ?? new RememberedToyAdapter(selectedSource == 4
+            ? new IntifaceToyAdapter(phoneSettings.Value, () => LocalToyKeys.LoadOrCreate(keyPath))
+            : selectedSource == 0
             ? new ButtplugToyAdapter(() => LocalToyKeys.LoadOrCreate(keyPath))
             : new LovenseDiscoveryAdapter(
             simulation ? () => new SimulatedLovenseBleApi(missingBluetooth ? 1 : 0) :
@@ -171,7 +248,7 @@ internal sealed class LocalToysPage : UserControl
             simulation ? () => new LocalToyKeys(new byte[32]) :
                 () => LocalToyKeys.LoadOrCreate(keyPath),
             simulation, scanDuration: simulation ? TimeSpan.FromMilliseconds(600) : null, commandsPerSecond: 10), simulation ? new MemoryToyStore() : new RememberedToyStore(
-                Path.Combine(Path.GetDirectoryName(BridgeConfig.ConfigPath)!, "remembered-toys.bin")));
+                Path.Combine(Path.GetDirectoryName(BridgeConfig.ConfigPath)!, selectedSource == 4 ? "intiface-remembered-toys.bin" : "remembered-toys.bin")));
         adapter.Changed += AdapterChanged;
         await adapter.EnableAutomaticConnectionsAsync(lifetime.Token, () => !scanPaused &&
             (adapter?.Snapshot.SupportsOutputWhileScanning == true || controller?.SchedulerState.ActiveFunctions is null or 0));
@@ -257,6 +334,10 @@ internal sealed class LocalToysPage : UserControl
                 if (diagnostic is not null) Log?.Invoke("error", diagnostic);
             }
             source.Enabled = resetBluetooth.Enabled = !busy && !shuttingDown;
+            phoneOptions.Visible = PhoneSource;
+            phoneAddress.Enabled = findPhone.Enabled = connectPhone.Enabled = PhoneSource && !busy && !findingPhone && !shuttingDown;
+            if (phoneSettings.Warning is string phoneWarning) status.Text += "\n" + phoneWarning;
+            else if (phoneSaveError is string saveError) status.Text += "\n" + saveError;
             cancel.Enabled = !shuttingDown && (busy || snapshot?.Devices.Any(device => device.ConnectionState == ToyConnectionState.Connecting) == true);
             stopAll.Enabled = controller is not null && !shuttingDown;
             RefreshFunctions(snapshot?.Devices ?? Array.Empty<LocalToyDescriptor>());
@@ -343,7 +424,7 @@ internal sealed class LocalToysPage : UserControl
         {
             _ = ShutdownAsync();
             // Settings owns these visual controls, but standalone card-grid users also need cleanup.
-            foreach (var control in new Control[] { source, updateRate, resetBluetooth, stopAll, cancel, status })
+            foreach (var control in new Control[] { source, updateRate, resetBluetooth, stopAll, cancel, status, phoneOptions })
                 if (control.Parent is null) control.Dispose();
         }
         base.Dispose(disposing);

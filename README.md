@@ -1,10 +1,10 @@
 <p align="center">
-  <img src="docs/images/shockwave-banner.svg" alt="ShockWave — desktop and VRChat toy controls" width="100%">
+  <img src="docs/images/shockwave-banner.svg" alt="ShockWave — desktop and integrated SteamVR toy controls" width="100%">
 </p>
 
 <p align="center">
-  <strong>Desktop and VRChat controls, together in one Windows app.</strong><br>
-  Bluetooth toys · OpenShock · PiShock · OSC / SPS · Direct app connections
+  <strong>Desktop and SteamVR controls, together in one Windows app.</strong><br>
+  Wrist menu · Floating panel · Bluetooth toys · OpenShock · PiShock · OSC / SPS · Friends Connect
 </p>
 
 <p align="center">
@@ -17,7 +17,9 @@
 
 # ShockWave
 
-ShockWave is a native Windows application for supported Bluetooth toys and OpenShock or PiShock devices. Use desktop controls, draw and loop patterns, connect VRChat avatar inputs, or pair with another person running ShockWave.
+ShockWave is a native Windows application for supported Bluetooth toys and OpenShock or PiShock devices. Draw and loop patterns on the desktop or with the built-in SteamVR wrist menu and floating panel. Pair with a friend running ShockWave, or use the separate VRChat OSC / SPS integrations.
+
+**The SteamVR panel is included in the app.** It needs no Unity project, avatar installation or avatar upload.
 
 **Development preview.** Get the complete Windows package from [Releases](https://github.com/Szeb95/ShockWave/releases/latest). See [verification and known limits](#verification-and-known-limits) before using hardware.
 
@@ -26,8 +28,9 @@ ShockWave is a native Windows application for supported Bluetooth toys and OpenS
 | Feature | How it works |
 | --- | --- |
 | **Bluetooth toy controls** | Discover supported Lovense toys, see individual functions and battery readings, and adjust Input, Sensitivity and Max %. |
-| **Draw and play patterns** | Select functions, draw curves, record and loop them through Toy control. Touch and Pointer modes also work with the optional avatar panel. |
-| **Shocker control** | Use OpenShock or PiShock with individual limits, pause and cooldown. Shock uses a fresh ARM → release → confirm action for every command. |
+| **Integrated SteamVR controls** | Open a compact wrist menu or a detailed floating panel. Use controller pointers, grip the side handles and resize with both hands. |
+| **Draw and play patterns** | Select functions, draw curves, record and loop them through Toy control. Desktop and SteamVR share the same patterns and controls. |
+| **Shocker control** | Use OpenShock or PiShock with individual limits, pause and cooldown. Shock requires two separate presses within three seconds. |
 | **VRChat and SPS** | Shared automatic SPS controls, plug/socket discovery and optional manual body-map connections. |
 | **Direct app connections** | Pair two ShockWave apps using a private code. Each receiver controls its own hardware and applies its own limits. |
 | **Test mode** | Preview supported control paths without sending physical output. |
@@ -41,6 +44,8 @@ ShockWave is a native Windows application for supported Bluetooth toys and OpenS
 
 ![ShockWave Shocker control preview](docs/images/shocker-control.png)
 
+![ShockWave integrated SteamVR floating panel preview](docs/images/steamvr-panel.png)
+
 ![ShockWave Connect preview](docs/images/connect.png)
 
 ![ShockWave Update preview](docs/images/update.png)
@@ -49,17 +54,22 @@ ShockWave is a native Windows application for supported Bluetooth toys and OpenS
 
 These are software-test previews with simulated devices and empty connection codes. They illustrate the interface; they are not evidence of physical-device testing.
 
-### Avatar panel — Creator Companion
+### Integrated SteamVR panel
 
-**[Add ShockWave Avatar Panel to Creator Companion](https://szeb95.github.io/ShockWave/)** · [Panel setup guide](work/ToyControlEditor/README.md)
+![ShockWave integrated SteamVR wrist menu preview](docs/images/steamvr-wrist.png)
 
-Keep the Unity tools updated through VCC. In Unity open **Tools → ShockWave → Panel**, choose the radial menu path and explicitly add/update your avatar. The panel starts hidden; its menu contains **Show panel**, **In right hand**, **Back of right hand** and **Panel size** (default 20%). Upload again after updating avatar content. Use Windows app **0.7.10 or later** for the new pointer.
+1. Start SteamVR, then open ShockWave.
+2. In **Settings → SteamVR panel**, choose the hand and whether to open as **Wrist** or **Panel**. Save settings to remember your choice.
+3. Use the headset icon at the bottom left of **Toy control** or **Shocker control** to open the overlay. The icon beside it recenters the floating panel.
+4. In Wrist mode, bring the other controller near the wrist icon, freshly hold grip and pull upward to unfold the menu. Select a toy function, then point at the grid and hold trigger to draw. Drawing continues outside the grid until you release.
 
-With both hand modes off, the panel stays fixed in the world. Fist-grab a handle in Touch or Pointer mode and draw with the free hand. You can refit a right-hand attachment in VR using the left hand, or select a hand mode while gripping and release to attach at that position. Fits last while the avatar remains loaded; the setup guide explains permanent Editor captures.
+Expand drops the larger panel. Touch either side handle and hold grip to move it while the other hand uses its pointer. Grip both handles and pull apart or together to resize; the return icon brings it back to the wrist. Pull the wrist's top bar back to its anchor to close the menu. Closing the wrist menu keeps active patterns and already submitted shocks running; **Stop** ends continuous toy activity and cancels pending shock confirmation.
+
+Settings include whole-overlay transparency, saved wrist placement and optional automatic opening when SteamVR is available. [Read the SteamVR guide](docs/STEAMVR.md) for controls and current limits.
 
 ## Getting started
 
-**Requirements:** Windows 10 version 1809 or newer, or Windows 11, on an x64 PC. Bluetooth control requires a compatible Windows Bluetooth adapter and supported toy. OpenShock and PiShock require their own hardware and account credentials. VRChat features require VRChat with OSC enabled.
+**Requirements:** Windows 10 version 1809 or newer, or Windows 11, on an x64 PC. The VR overlay requires SteamVR and tracked controllers; it runs independently of avatar content. Bluetooth control requires a compatible Windows Bluetooth adapter and supported toy. OpenShock and PiShock require their own hardware and account credentials. The separate VRChat OSC / SPS features require VRChat with OSC enabled.
 
 To install:
 
@@ -67,13 +77,17 @@ To install:
 2. Download its Windows x64 package. For a portable ZIP, extract the **whole** archive and keep its folders together, then run `ShockWave.exe`.
 3. Open **Settings** and enable **Test mode** before trying the controls. Fresh settings currently start with Test mode off.
 4. Follow the guide for [Bluetooth toys](docs/lovense-remote/LOCAL-TOYS.md), [OpenShock](overlay/README.md) or [PiShock](docs/PISHOCK.md).
-5. For another ShockWave user, follow [Connect setup](docs/REMOTE.md). Keep connection codes private; connecting authorizes the paired person's supported controls within your limits.
+5. For VR, follow [SteamVR setup](docs/STEAMVR.md). For another ShockWave user, follow [Connect setup](docs/REMOTE.md). Keep connection codes private; connecting authorizes the paired person's supported controls within your limits.
+
+**A visible toy or moving curve does not mean hardware output is enabled.** Test mode deliberately blocks vibration and other device commands. To use hardware, turn off **Settings → Debug → Test mode**, save settings and confirm Live mode, then select a connected function and start a fresh draw. Each owner's Sensitivity and Max % still apply.
 
 The current Bluetooth backend bundles Intiface Engine as a hidden child process; no separate Intiface or Lovense Remote application is required. The optional legacy Lovense DLL has separate vendor terms and is excluded from the public source and current portable package.
 
-Avatar tools are optional. Import them into your project and explicitly add/update the panel yourself using the [Toy Control guide](work/ToyControlEditor/README.md). The Windows app does not install avatar content or save Unity scenes.
+The older avatar panel remains optional for existing setups: [Creator Companion listing](https://szeb95.github.io/ShockWave/) · [avatar installation guide](work/ToyControlEditor/README.md). It is separate from the integrated SteamVR panel. The Windows app does not install avatar content or save Unity scenes.
 
 ### Updates and saved settings
+
+**Moving from 0.7.x to 0.8.0:** download and extract the complete 0.8.0 package once. Older updaters do not recognize its added SteamVR files. Your saved settings remain in the same user-data folder; 0.8.0 includes updated validation for future SteamVR packages.
 
 **Update**, directly below Settings, shows the installed version, checks for published releases and links to the new version on GitHub. A newer compatible release adds **Update available** beside the Toy panel heading; clicking it opens Update. The **Update** button downloads and verifies the package, uses the existing normal-close confirmation, installs it and restarts ShockWave.
 
@@ -88,7 +102,8 @@ Settings, device limits, mappings and encrypted credentials use the existing `%L
 | Windows interface, OpenShock and settings | [Windows app](overlay/README.md) |
 | PiShock accounts and devices | [PiShock setup](docs/PISHOCK.md) |
 | Bluetooth setup, compatibility and limits | [Local toys](docs/lovense-remote/LOCAL-TOYS.md) |
-| Drawing, Touch / Pointer and avatar installation | [Toy Control](work/ToyControlEditor/README.md) |
+| Integrated wrist menu, floating panel and VR settings | [SteamVR](docs/STEAMVR.md) |
+| Optional legacy avatar panel and Unity installation | [Avatar panel](work/ToyControlEditor/README.md) |
 | SPS discovery and body mappings | [SPS](docs/lovense-remote/SPS.md) |
 | Pairing two apps and connection limitations | [Connect](docs/REMOTE.md) |
 | Standalone OSC bridge | [Bridge](bridge/README.md) |
@@ -97,6 +112,7 @@ Settings, device limits, mappings and encrypted credentials use the existing `%L
 ## Verification and known limits
 
 - Automated checks cover simulated devices, control limits, fresh-input rules, disconnect behavior and interface rendering. Physical Bluetooth response, stop timing and headset behavior still need model-specific verification.
+- Six default SteamVR controller profiles are included. A live passive check verified pointer poses, triggers and grips on Oculus Touch; other headset/controller combinations still need physical testing.
 - Direct app pairing has been exercised with two clients on one PC. Separate household/mobile networks still need testing. There is **no TURN relay fallback**; some networks cannot establish a direct connection.
 - Stop cancels pending confirmation and continuous toy activity. A shocker command already accepted by its provider can continue for its bounded duration.
 - Current Windows packages are unsigned. A clean-PC installation test remains pending.

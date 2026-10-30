@@ -1,5 +1,7 @@
 # Updating ShockWave
 
+**0.7.x → 0.8.0:** install the full 0.8.0 ZIP manually once. Older updaters reject the new SteamVR library, manifests and bindings. Existing user-data settings remain separate and are reused. Version 0.8.0 recognizes these files for future updates.
+
 Open **Update** below **Settings** in the left navigation.
 
 - **Current version** identifies the running copy.

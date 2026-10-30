@@ -18,6 +18,7 @@ internal interface IButtplugSession : IAsyncDisposable
     Task InitializeAsync(CancellationToken token);
     Task<JsonElement> RequestAsync(string kind, object fields, CancellationToken token, Func<bool>? isCurrent = null);
     string? Identity(uint index);
+    bool PersistentIdentity(uint index) => true;
 }
 
 // One app-owned engine, reverse WebSocket on a private loopback URL. No remote

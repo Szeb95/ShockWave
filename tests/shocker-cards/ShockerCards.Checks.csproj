@@ -13,6 +13,7 @@
     <Compile Include="../../overlay/Sps/*.cs" />
     <Compile Include="../../overlay/Remote/*.cs" />
     <Compile Include="../../overlay/Updates/*.cs" />
+    <Compile Include="../../overlay/SteamVr/**/*.cs" />
   </ItemGroup>
   <Import Project="../../overlay/ToyControl/ToyControl.Shared.props" />
 </Project>

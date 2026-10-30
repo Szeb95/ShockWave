@@ -16,7 +16,8 @@ internal static class UpdatePackage
     private static readonly HashSet<string> RootFiles = new(StringComparer.OrdinalIgnoreCase)
     {
         "ShockWave.exe", "node.exe", "README.txt", "README.md", "LICENSE", "THIRD-PARTY.md", "THIRD-PARTY.txt",
-        "REMOTE.md", "TOY-CONTROL.md", "SPS.md", "PISHOCK.md", "UPDATES.md", "manifest.sha256", "payload-manifest.json",
+        "REMOTE.md", "TOY-CONTROL.md", "SPS.md", "PISHOCK.md", "UPDATES.md", "STEAMVR.md", "INTIFACE-PHONE.md",
+        "app.vrmanifest", "openvr_api.dll", "openvr-version.json", "build-info.json", "manifest.sha256", "payload-manifest.json",
         "D3DCompiler_47_cor3.dll", "PenImc_cor3.dll", "PresentationNative_cor3.dll", "vcruntime140_cor3.dll", "wpfgfx_cor3.dll"
     };
 
@@ -50,7 +51,8 @@ internal static class UpdatePackage
         if (name.Equals("config.json", StringComparison.OrdinalIgnoreCase) || name.Equals("bridge-config.json", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("update-settings.json", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".bin", StringComparison.OrdinalIgnoreCase) ||
             name.EndsWith(".log", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".dpapi", StringComparison.OrdinalIgnoreCase)) return false;
-        return RootFiles.Contains(path) || path.StartsWith("bridge/", StringComparison.Ordinal) || path.StartsWith("ToyControl/", StringComparison.Ordinal) ||
+        return RootFiles.Contains(path) || path.StartsWith("bindings/", StringComparison.Ordinal) && path.EndsWith(".json", StringComparison.OrdinalIgnoreCase) ||
+            path.StartsWith("bridge/", StringComparison.Ordinal) || path.StartsWith("ToyControl/", StringComparison.Ordinal) ||
             path.StartsWith("native/buttplug/", StringComparison.Ordinal) || path.StartsWith("docs/", StringComparison.Ordinal) ||
             path.StartsWith("licenses/", StringComparison.Ordinal) || path.StartsWith("UnityEditor/", StringComparison.Ordinal) || path.StartsWith("Avatar-tools/", StringComparison.Ordinal);
     }

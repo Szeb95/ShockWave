@@ -1,0 +1,10 @@
+{
+  "applications": [{
+    "app_key": "szebs.shockwave.steamvr",
+    "launch_type": "binary",
+    "binary_path_windows": "ShockWave.exe",
+    "is_dashboard_overlay": true,
+    "action_manifest_path": "bindings/actions.json",
+    "strings": {"en_us": {"name": "ShockWave", "description": "ShockWave wrist and floating panel"}}
+  }]
+}

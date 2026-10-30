@@ -5,6 +5,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../overlay/ShockWave.Overlay.csproj" />
-    <Content Include="../../overlay/ToyControl/Shaders/**/*" Link="ToyControl/Shaders/%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="Always" />
   </ItemGroup>
+  <Import Project="../legacy-renderer/LegacyRenderer.props" />
 </Project>

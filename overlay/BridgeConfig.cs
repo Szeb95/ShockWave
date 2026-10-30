@@ -25,6 +25,10 @@ internal sealed class BridgeConfig
     [JsonIgnore] public bool ActiveSelfTestEnabled { get => IsPiShock ? PiShockSelfTestEnabled : SelfTestEnabled; set { if (IsPiShock) PiShockSelfTestEnabled = value; else SelfTestEnabled = value; } }
     [JsonIgnore] public List<string> ActiveSelfTestShockerKeys { get => IsPiShock ? PiShockSelfTestShockerKeys : SelfTestShockerKeys; set { if (IsPiShock) PiShockSelfTestShockerKeys = value; else SelfTestShockerKeys = value; } }
     public bool DryRun { get; set; }
+    public int PanelTransparencyPercent { get; set; }
+    public string PanelHand {get;set;}="";
+    public string PanelStartMode {get;set;}="Wrist";
+    public bool PanelAutoOpenInVr {get;set;}
     public bool SelfTestEnabled { get; set; }
     public List<string> SelfTestShockerKeys { get; set; } = [];
     public string SelfTestAvatarGroup { get; set; } = "PiCtrl";

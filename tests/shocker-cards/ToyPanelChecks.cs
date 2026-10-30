@@ -20,7 +20,7 @@ internal static class ToyPanelChecks
     {
         foreach (var width in new[] { 1040, 790 })
         {
-            var local = new LocalToysPage();
+            var local = new LocalToysPage(phoneSettings: new());
             var config = new BridgeConfig { Shockers = [new() { Name = "My shocker" }, new() { Name = "Toy 2" }] };
             using var form = new OverlayForm(config, initialSaveConfig: _ => { }, initialLocalToys: local)
             { Size = new Size(width, width == 790 ? 590 : 760) };
@@ -100,6 +100,19 @@ internal static class ToyPanelChecks
             Get<Panel>(form, "settingsPage").Controls.OfType<FlowLayoutPanel>().Single().ScrollControlIntoView(local.UpdateRateInput.Parent!);
             using (var image = new Bitmap(host.Width, host.Height))
             { host.DrawToBitmap(image, host.ClientRectangle); image.Save(Path.Combine(AppContext.BaseDirectory, $"toy-settings-{width}.png")); }
+            local.SourceInput.SelectedIndex = 4;
+            Pump(() => !local.Busy && local.PhoneSource);
+            var phoneCard = local.SourceInput.Parent!;
+            Check(local.PhoneOptions.Visible && local.PhoneOptions.Bottom < local.UpdateRateInput.Top &&
+                local.ConnectPhoneButton.Parent == local.PhoneOptions && local.PhoneAddressInput.Width == local.PhoneOptions.Width &&
+                local.OperationStatus.Bottom <= phoneCard.ClientSize.Height,
+                "Intiface phone controls and status fit Bluetooth settings " + width);
+            Get<Panel>(form, "settingsPage").Controls.OfType<FlowLayoutPanel>().Single().ScrollControlIntoView(phoneCard);
+            foreach (var control in Descendants(phoneCard)) _ = control.Handle;
+            using (var image = new Bitmap(host.Width, host.Height))
+            { host.DrawToBitmap(image, host.ClientRectangle); image.Save(Path.Combine(AppContext.BaseDirectory, $"intiface-settings-{width}.png")); }
+            using (var image = new Bitmap(phoneCard.Width, phoneCard.Height))
+            { phoneCard.DrawToBitmap(image, phoneCard.ClientRectangle); image.Save(Path.Combine(AppContext.BaseDirectory, $"intiface-card-{width}.png")); }
             Check(Get<System.Diagnostics.Process?>(form, "bridge") is null, "no bridge or physical toys used by preview " + width);
             var shutdown = local.ShutdownAsync(); Pump(() => shutdown.IsCompleted); shutdown.GetAwaiter().GetResult();
             host.Controls.Remove(shell); form.Controls.Add(shell);

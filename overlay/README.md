@@ -1,8 +1,100 @@
 # ShockWave overlay
 
+## Integrated SteamVR release — Windows 0.8.0
+
+The app includes its own wrist menu and floating panel. Start SteamVR, then use the headset icon on Toy control or Shocker control. No Unity or avatar installation is required. Settings contains hand side, Wrist/Panel startup mode, automatic opening and whole-overlay transparency. See [SteamVR setup](../docs/STEAMVR.md). Test mode previews values while blocking physical commands; turn it off through Settings, save/confirm and start fresh input to use hardware.
+
+## Stable SteamVR input files — Windows 0.7.30, 2026-10-30
+
+SteamVR input now uses an app-owned stable `SzebsToys/SteamVRInput` directory rather than files inside a disposable versioned app folder. A new persistent input identity avoids the stale legacy registration pointing at removed 0.7.16 files. Physical paths are resolved from file handles so SteamVR can read files even when Windows redirects a Codex-launched process's user-data writes. Later launches reuse the registered stable directory across launch contexts and refresh the current executable path. Setup failures are reported explicitly instead of silently continuing without controller input.
+
+The included controller mappings, passive action priority, pointer/grip/placement behavior and output limits are unchanged. A live passive check verified both pointer poses, triggers and grips are bound and active on the connected Oculus Touch profiles, with valid poses and unchanged scene focus. No controller buttons were synthesized, haptics sent or device/provider commands issued. Physical dragging/clicking remains the owner's test. Evidence: `work/vr-input-binding-checks/`.
+
+## Wrist visibility and immediate placement preview — Windows 0.7.29, 2026-10-30
+
+Wrist proximity now follows the tracked free controller independently of its grip binding. A missing/inactive grip binding no longer makes the icon disappear; tracking also updates visibility when action setup/state is unavailable. Grip capture still requires an available binding and a fresh release/press after recovery. Binding loss cancels an unfinished drawer pull without stopping recorded waves. VR status reports a missing grip and points to the existing Open wrist menu recovery action in Settings.
+
+Hand side and Wrist/Panel selections now preview immediately, like transparency; **Save settings** remembers them. The VR icon also reapplies the selected placement when VR is already connected, including after returning from a panel to the wrist. Repeated opening preserves an already-correct placement. Loading saved options suppresses preview callbacks so it does not briefly change placement. Source/device/provider settings, saved wrist fit and 25/30 ms wrist follow remain. Evidence: `work/vr-visibility-checks/`. The installed 0.7.27 payload passed its manifest audit after cleanup; a read-only live check observed tracked hands, a visible native overlay and an empty closed-wrist image. Hardware interaction with the new version remains owner verification.
+
+## Less wrist smoothing — Windows 0.7.27, 2026-10-30
+
+The attached wrist follows arm movement more directly: its position/rotation smoothing time constants change from **40/45 ms to 25/30 ms**. Pointer smoothing, floating grip smoothing and the pull-open animation retain their existing settings. The fixed icon, proximity, separate rail and continuing hidden playback remain. Evidence: `work/wrist-smoothing-checks/`; the owner still needs to judge the feel in VR.
+
+## Easier wrist grip and separate rail — Windows 0.7.26, 2026-10-30
+
+The closed Move icon now appears within about **18 cm** and stays at the saved wrist anchor throughout opening. Grip near it, including from above the overlay, then pull up: a **separate bar** appears just above the icon and follows the pull. The bar uses the floating panel handle's rounded grey/green design with three grip marks. Its grab zone accepts a hovering controller up to about 12 cm above the plane, avoiding controller collision. Release still snaps open/closed.
+
+When expanded, the top bar appears only while the other controller is nearby; the fixed icon has its own nearby-hand visibility. Both hide after the hand moves about **24 cm** away, while the menu stays open. An active grip keeps the origin and bar visible until release. Closing continues to preserve waves and submitted shocks. Saved fit, output behavior and the floating/desktop views are unchanged. Evidence: `work/wrist-handle-checks/`; physical comfort still needs the owner's VR test.
+
+## Pull-open wrist menu — Windows 0.7.25, 2026-10-30
+
+The wrist starts closed. Bring the other controller within about 8 cm of its saved anchor to reveal the small Move icon. Touch it, freshly hold grip and pull toward the top of the watch to unfold it. Release to keep it open. Touch and grip the top handle, then pull back to the anchor to close; moving the other hand away hides the remaining icon. The reveal uses the existing persistent texture and leaves the saved wrist fit alone.
+
+Closing hides controls while recorded waves and submitted shocks continue with their original timing. It cancels unfinished input and pending shock confirmation, without sending Stop, restarting a wave or replaying a command. Tracking/focus loss after closing also preserves playback. Explicit Stop and existing app/VR shutdown, disconnect and source-revocation rules still apply. **Settings → SteamVR panel → Open wrist menu** is the recovery control; **Adjust wrist position** restores the existing pointer-held Move control and saves on release. The floating panel and desktop control layouts retain their behavior. Software-only gesture/output checks are in `work/wrist-menu-checks/`; headset feel remains to be tested.
+
+## Timed shock strength — Windows 0.7.24, 2026-10-30
+
+After confirmation, **Shock sent · 40%** (for example) replaces the confirmation prompt for the submitted duration. Values use each successfully submitted target's existing intensity/duration caps. Multiple active strengths show a range; shorter capped durations disappear from that range independently. Test mode says **Test shock**. The wrist uses the same position between Duration and its icons; floating and desktop views use their existing confirmation-status positions. This is a local indication of the submitted command, not physical telemetry or delivery acknowledgement. It never sends, repeats or prolongs a command.
+
+## Unused-code cleanup — Windows 0.7.23, 2026-10-30
+
+Only unused code is removed. All active SPS, avatar-panel and PiCtrl OSC input/feedback remain. The app no longer compiles the unused Shader Lab demo listener, retired desktop HLSL renderer/worker, shader-compiler dependency or unused native preview control. Historical renderer checks and their shader assets now live under `tests/legacy-renderer/`. Obsolete native button aliases and their unused wrappers are removed; current panel layout, controls, recording, limits, settings and avatar tools remain.
+
+## Remove desktop VRC status box — Windows 0.7.22, 2026-10-30
+
+The Toy control page no longer shows the bottom-right Waiting for VRC/Connected box or its small subtitle. Footer icons and hover labels remain. Existing VRC connection handling, Test mode, native VR layouts and legacy avatar display remain unchanged.
+
+## Simple VR icon and hover labels — Windows 0.7.21, 2026-10-30
+
+Both desktop control pages use a simple visor outline for Open in VR. Hover over the footer icons to see a small label above them: Open in VR, Recenter, Stop all or Record. Labels disappear when the pointer leaves. The shocker values have space above the label row; desktop slider drawing and input use the same updated bounds. Existing command behavior and native VR layouts are unchanged.
+
+## Shared Stop icon — Windows 0.7.20, 2026-10-30
+
+The desktop Clear curve and Stop all buttons are removed, including their old click regions. Both control pages now have the same round pink Stop icon after VR and Recenter. Toy control's Record icon follows Stop. The icon retains the existing Stop all behavior and works before display acknowledgement; native wrist/floating controls and existing avatar layouts are unchanged.
+
+## Recenter beside VR — Windows 0.7.19, 2026-10-30
+
+Both desktop control pages now have a round Recenter target icon immediately to the right of Open in VR. It uses the existing SteamVR Recall action and cancels active input before repositioning. The Toy control Record icon moves one slot to the right. Recenter does not start SteamVR; use Open in VR to open the overlay.
+
+## Wrist shock confirmation — Windows 0.7.18, 2026-10-30
+
+After the first Shock press, the wrist shows **Press again to shock within 3 sec** between Duration and the bottom icons. The amber prompt uses the existing pending confirmation state and disappears on confirmation, expiry or cancellation. It fits the supported wrist sizes; the floating and desktop layouts retain their existing instructions. Existing command timing and limits are unchanged.
+
+## Smoother VR slider feedback — Windows 0.7.17, 2026-10-30
+
+Intensity and duration sliders keep showing completed frames during a continuous drag in both wrist and floating modes. Dragging requests up to 60 visual updates per second; the ordinary display cadence and approved pointer/placement smoothing remain. Current values still have to appear before new command actions are accepted. Stop remains immediate. Evidence and software-only verification: `work/slider-lag-checks/`.
+
+## VR startup options and bottom icons — Windows 0.7.16, 2026-10-30
+
+**Settings → SteamVR panel** now saves Left/Right hand, Wrist/Panel startup mode and optional automatic opening with ShockWave. Automatic opening waits for SteamVR and stops after success, manual close/cancellation or bounded startup failures. Existing settings default to manual opening and preserve the remembered wrist. The top toolbar is removed from both desktop control pages. Both have the same headset icon at bottom left; Toy control's Record icon is immediately to its right. Close VR, Recall and Reconnect VRC move to Settings. The GDI+ desktop, approved SteamVR artwork, shared recording/output gates and saved limits remain.
+
+## Simplified desktop controls — Windows 0.7.15, 2026-10-30
+
+The desktop now has one rectangular Shock button matching Vibrate and Sound. Press → release → press again within three seconds retains production confirmation, limits and no replay. The ARM/SHOCK circles and their old hit areas are removed. Record uses the shared round VR icon; Play loop and duplicate Toy control/Shocker control headings are removed. Sidebar navigation and record-on-release looping remain. The SteamVR design is unchanged.
+
+## Desktop page navigation — Windows 0.7.14, 2026-10-30
+
+The Toys/Shockers switch buttons are removed from both desktop panel pages, including their labels and click/hover targets. Choose Toy control or Shocker control from the app sidebar. The GDI+ layout, previously removed Touch button, SteamVR page-switch icon, shared controls, limits and saved settings retain their existing behavior.
+
+## Classic desktop replica without HLSL — Windows 0.7.13, 2026-10-30
+
+The desktop Toy control and Shocker control pages now recreate the original ShockWave layout with GDI+, including the old function list, Record/Play/Clear/Stop, curve area, sliders and separate ARM/SHOCK circles. **Touch is removed on both desktop pages.** The active desktop renderer does not read/compile HLSL or create the old GPU renderer. SteamVR retains the approved wrist/floating visuals and settings. Its placement, size and opacity do not change the desktop layout. Both views share production control sessions; pointer capture and confirmation gates prevent cross-view takeover. See [SteamVR setup](../docs/STEAMVR.md) and STATUS for the new complete app and verification.
+
+## Native SteamVR panel — Windows 0.7.12, 2026-10-30
+
+Toy control and Shocker control now show the approved Test 024 wrist/floating design using the existing real inventory and control sessions. Start SteamVR, then **Toy control → Open in SteamVR**. No avatar setup is needed. Direct grip handles, free-hand pointer, two-hand sizing, saved wrist Move, continuous captured drawing and transparent frames remain. Additional functions use ten-row pages with small navigation buttons.
+
+**Settings → SteamVR panel → Transparency** previews the whole-overlay fade; **Save settings** retains it. Shock uses a released arm click and a second released click on the same icon within three seconds. It preserves existing per-target caps, Test mode and no retry/replay; sliders and placement send no shocker command. Desktop Stop remains available independently of rendered frames. Existing uploaded avatar controls/OSC and Unity sources remain compatible and unchanged. See [SteamVR setup](../docs/STEAMVR.md). Earlier HLSL desktop descriptions below are historical; avatar graphics remain supported.
+
+The exact portable app, backup, automated evidence and physical-test limits are recorded in STATUS. Build a complete folder without a sharing archive using `package-release.ps1 -Version 0.7.12 -NoZip` in a new output location. Normal release packaging retains its archive behavior.
+
 ## Multiple shocker selection — Windows 0.7.11, 2026-10-24
 
 In **Shocker control**, click each shocker row to select it and click again to deselect it. Multiple local and Remote shockers remain selected across pages. Shared intensity/duration and Vibrate/Sound or a single right ARM → release → left SHOCK confirmation apply to all selected targets, each through its own caps, pause, cooldown and existing Test mode. Changing the selection cancels confirmation; disconnect removes unavailable selections without restoring them on reconnect. Submissions are individual attempts with the same original 250 ms expiry, never a delayed queue/retry. A partial submission is reported; software submission does not confirm physical output or simultaneous arrival. The existing uploaded v7 panel supports this with the updated EXE and needs no avatar update. Published in [ShockWave 0.7.11](https://github.com/Szeb95/ShockWave/releases/tag/v0.7.11); see STATUS for its exact package and checks.
+
+## Optional Intiface phone source — 2026-10-24
+
+**Settings → Bluetooth toys → Toy source → Intiface / phone** adds Find phone, a server-address fallback and Connect phone. The selected source/address is saved separately and reconnects automatically with zero activity. Intiface runs on the phone; the PC needs no separate Intiface Central application. Give toys unique Intiface nicknames to retain their phone-source limits/mappings; unnamed or duplicate-name toys have temporary identities. Existing built-in Bluetooth and provider settings remain. See [phone setup, identity and stop limits](../docs/lovense-remote/INTIFACE-PHONE.md); real phone/physical testing is still pending.
 
 ## Update page — 2026-10-21
 

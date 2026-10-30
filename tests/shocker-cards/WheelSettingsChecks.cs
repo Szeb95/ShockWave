@@ -66,8 +66,11 @@ internal static class WheelSettingsChecks
         using (var form = new OverlayForm(config, initialSaveConfig: _ => saves++,
             initialSpsStore: new SpsStore(Path.Combine(AppContext.BaseDirectory, "wheel-fixture-sps.json"))))
         {
-            var numbers = Children(form).OfType<NumericUpDown>().ToArray();
-            var choices = Children(form).OfType<ComboBox>().ToArray();
+            // Scope this settings regression to editable settings and cards; Connect has its own friend selector.
+            var settingsControls = Children(Get<Panel>(form, "settingsPage"))
+                .Concat(Get<List<ShockerCard>>(form, "shockerCards").SelectMany(Children)).ToArray();
+            var numbers = settingsControls.OfType<NumericUpDown>().ToArray();
+            var choices = settingsControls.OfType<ComboBox>().ToArray();
             Check(numbers.Length >= 5 && numbers.All(c => c is SettingNumberInput) &&
                 choices.Length > 0 && choices.All(c => c is SettingChoiceInput),
                 "shared settings, cooldown and Bluetooth controls use scroll-safe inputs");

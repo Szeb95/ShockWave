@@ -30,7 +30,7 @@ internal static class ToyControlLabels
     }
     public static Bitmap Create(ToyControlSession session) => Capture(session).Draw();
     // Capture values on the UI thread. Rasterization never reads a live session/model.
-    public static Frame Capture(ToyControlSession session)
+    public static Frame Capture(ToyControlSession session,bool showInputMode=true,bool showPageSwitch=true,bool desktopStyle=false)
     {
         var model = session.DisplayModel;
         List<DrawText> commands=[];
@@ -53,19 +53,26 @@ internal static class ToyControlLabels
                 Text(row.Function.Name,54,y+24,12,faint,width:208);
             }
             if(model.PageCount>1) { Text("‹",55,645,27,faint); Text("›",272,645,27,faint); Center($"{model.Page+1} / {model.PageCount}",new(112,648,134,36),13); }
-            Center("STOP ALL",ToyControlLayout.Stop,14,true);
-            Center(session.PointerMode ? "Pointer" : "Touch",ToyControlLayout.InputMode,14,true);
-            Center("Toys",ToyControlLayout.PageSwitch,16,true);
-            Text("Shocker control",368,178,22,white,true,width:400);
+            if(!desktopStyle) Center("STOP ALL",ToyControlLayout.Stop,14,true);
+            if(showInputMode) Center(session.PointerMode ? "Pointer" : "Touch",ToyControlLayout.InputMode,14,true);
+            if(showPageSwitch) Center("Toys",ToyControlLayout.PageSwitch,16,true);
+            if(!desktopStyle) Text("Shocker control",368,178,22,white,true,width:400);
             Center("Intensity",new(380,210,148,30),18,true); Center("Duration",new(540,210,148,30),18,true);
-            Center($"{session.Shockers.Intensity}%",new(400,600,108,36),24,true);
-            Center($"{session.Shockers.DurationMs/1000d:0.0}s",new(560,600,108,36),24,true);
-            Center("SHOCK",ToyControlLayout.ShockButton(33),19,true); Center("ARM",ToyControlLayout.ShockButton(32),19,true);
-            Center("2 · confirm",new(800,385,156,30),16); Center("1 · arm",new(1010,385,156,30),16);
+            var valueY=desktopStyle ? 576 : 600;
+            Center($"{session.Shockers.Intensity}%",new(400,valueY,108,36),24,true);
+            Center($"{session.Shockers.DurationMs/1000d:0.0}s",new(560,valueY,108,36),24,true);
+            if(desktopStyle) Center("Shock",DesktopPanelLayout.Shock,22,true);
+            else
+            {
+                Center("SHOCK",ToyControlLayout.ShockButton(33),19,true); Center("ARM",ToyControlLayout.ShockButton(32),19,true);
+                Center("2 · confirm",new(800,385,156,30),16); Center("1 · arm",new(1010,385,156,30),16);
+            }
             Center("Vibrate",ToyControlLayout.ShockButton(34),22,true); Center("Sound",ToyControlLayout.ShockButton(35),22,true);
-            Text("Right → release → left within 3 seconds",800,600,15,faint,width:390);
-            Text(session.Shockers.Armed ? $"Confirm · {Math.Ceiling(session.Shockers.Remaining(ToyOscRouter.Clock)*3):0}s remaining" : "Two steps for every shock",800,626,16,session.Shockers.Armed ? green : faint,width:390);
-            Text(session.TestMode ? "TEST MODE · no device output" : "Live · owner limits apply",800,661,13,faint,width:390);
+            Text(desktopStyle ? "Shock → release → Shock within 3 seconds" : "Right → release → left within 3 seconds",800,600,15,faint,width:390);
+            var armed=desktopStyle ? session.Shockers.ArmedFromDesktop : session.Shockers.Armed;
+            var feedback=desktopStyle ? session.Shockers.ShockFeedback(ToyOscRouter.Clock) : "";
+            Text(armed ? $"Confirm · {Math.Ceiling(session.Shockers.Remaining(ToyOscRouter.Clock)*3):0}s remaining" : feedback.Length>0 ? feedback : "Two steps for every shock",800,626,16,armed || feedback.Length>0 ? green : faint,width:390);
+            Text(session.Shockers.IsTestMode() ? "TEST MODE · no device output" : "Live · owner limits apply",800,661,13,faint,width:390);
             return new(commands.ToArray());
         }
         Text("TOY FUNCTIONS",43,124,17,white,true); Text("Choose functions to draw together",43,151,12,faint);
@@ -79,11 +86,15 @@ internal static class ToyControlLabels
         }
         if(model.PageCount>1) { Text("‹",55,645,27,faint); Text("›",272,645,27,faint); Center($"{model.Page+1} / {model.PageCount}",new(112,648,134,36),13); }
         Text($"{model.Toys.Count} toys · {model.FunctionCount} functions",52,690,11,faint,width:260);
-        Text("VRC toy control",368,178,20,white,true,width:245); Text($"{model.Level*100:0}%",645,175,28,model.LiveColor,true,165);
-        Center("Shockers",ToyControlLayout.PageSwitch,16,true);
-        Center(model.Recording || model.RecordArmed ? "Recording" : "Record",ToyControlLayout.Record,14,true);
-        Center("Play loop",ToyControlLayout.Play,14,true);
-        Center(session.PointerMode ? "Pointer" : "Touch",ToyControlLayout.InputMode,14,true);
+        if(!desktopStyle) Text("VRC toy control",368,178,20,white,true,width:245);
+        Text($"{model.Level*100:0}%",645,175,28,model.LiveColor,true,165);
+        if(showPageSwitch) Center("Shockers",ToyControlLayout.PageSwitch,16,true);
+        if(!desktopStyle)
+        {
+            Center(model.Recording || model.RecordArmed ? "Recording" : "Record",ToyControlLayout.Record,14,true);
+            Center("Play loop",ToyControlLayout.Play,14,true);
+        }
+        if(showInputMode) Center(session.PointerMode ? "Pointer" : "Touch",ToyControlLayout.InputMode,14,true);
         Text(model.PatternStatus,841,178,13,faint,width:342); Text($"{model.SelectedCount} selected",841,197,11,faint,width:342);
         if(model.SelectedCount>0)
         {
@@ -91,10 +102,13 @@ internal static class ToyControlLabels
             for(var tick=0;tick<5;tick++) Text(model.DisplayPattern is { } clip ? $"{clip.Duration*tick/4:0.0}s" : tick==4 ? "NOW" : $"−{8-tick*2}s",399+tick*186,592,12,faint,width:70);
         }
         else Center("Select a function to draw",new(405,382,765,48),20,true);
-        Center("Clear curve",ToyControlLayout.Clear,14,true); Center("STOP ALL",ToyControlLayout.Stop,14,true);
-        var status=session.Vrc.IsLive ? "VRC CONNECTED" : "WAITING FOR VRC";
-        Text(status,960,633,14,session.Vrc.IsLive ? green : faint,true,width:213);
-        Text(session.TestMode ? "Test mode · no toy output" : "Live · Toy panel limits apply",960,654,11,faint,width:213);
+        if(!desktopStyle) {Center("Clear curve",ToyControlLayout.Clear,14,true); Center("STOP ALL",ToyControlLayout.Stop,14,true);}
+        if(!desktopStyle)
+        {
+            var status=session.Vrc.IsLive ? "VRC CONNECTED" : "WAITING FOR VRC";
+            Text(status,960,633,14,session.Vrc.IsLive ? green : faint,true,width:213);
+            Text(session.TestMode ? "Test mode · no toy output" : "Live · Toy panel limits apply",960,654,11,faint,width:213);
+        }
         return new(commands.ToArray());
     }
 }

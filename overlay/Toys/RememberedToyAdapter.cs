@@ -364,6 +364,7 @@ internal sealed class RememberedToyAdapter : IRememberedToyAdapter, ILocalToyOut
                 enabled = connectAll || remembered.TryGetValue(key, out var previous) && previous.AutoConnect;
             }
             var descriptor = inner.Snapshot.Devices.Single(device => device.DeviceKey == key);
+            if (!descriptor.PersistentIdentity) return;
             SaveChangeCore(new(key, descriptor.Model, enabled, descriptor.LastSeenUtc), key);
             if (explicitConnect) lock (sync) forgotten.Remove(key);
         }

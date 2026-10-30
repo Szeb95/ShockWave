@@ -363,7 +363,7 @@ internal static class Program
         Check(labels.GetPixel(580,650).A==0 && labels.GetPixel(400,50).A==0,"removed Zero/header labels leave no ghost text");
         var ink=0; for(var y=632;y<674;y++) for(var x=960;x<1175;x++) if(labels.GetPixel(x,y).A>100) ink++;
         Check(ink>250,"connected status text is rendered at the bottom right");
-        Check(renderer.CompileError is null && session.Model.LoopCount==1,"accepted pattern layout compiles and draws through production HLSL");
+        Check(renderer.CompileError is null && session.Model.LoopCount==1,"accepted pattern layout still draws in the historical HLSL fixture");
         session.Action("InInputMode",false);
         using(var pointerLabels=ToyControlLabels.Create(session)) renderer.UploadLabels(pointerLabels);
         renderer.Render(ShaderState.From(session.Model,1240,608,0,28,0),false);

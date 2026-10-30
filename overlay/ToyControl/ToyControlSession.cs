@@ -64,7 +64,7 @@ internal sealed class ToyControlSession : IDisposable
     public int InputModeRevision { get; private set; }
     public ToyControlSession(Func<ToyAdapterSnapshot?> inventory, Func<LocalToyController?> getController)
     {
-        this.inventory = inventory; this.getController = getController; Vrc = new(this);
+        this.inventory = inventory; this.getController = getController; Vrc = new(this);Shockers.IsTestMode=()=>TestMode;
     }
     public void Tick(double now)
     {
@@ -188,6 +188,19 @@ internal sealed class ToyControlSession : IDisposable
         Notice = "Each owner's Sensitivity and Max % apply";
     }
     public void Release(bool commit = true) { if(!drawingVrc) blockDesktop=false; Model.Release(commit); }
+    // Native SteamVR and the desktop panel use the same ownership and lease path.
+    public void DrawPanel(float value,bool freshPress)
+    {
+        if(!float.IsFinite(value)) return;
+        var graph=ShockWave.ShaderLab.PanelLayout.Graph;
+        Draw(new(graph.X+graph.Width*.5f,graph.Bottom-Math.Clamp(value,0,1)*graph.Height),false,freshPress);
+    }
+    public void SelectPanelFunction(string toy,string function)
+    {
+        Sync();if(Model.Touching) return;
+        var row=Find((toy,function));if(row is not {Connected:true}) return;
+        Vrc.BlockTouch();row.Function.Selected=!row.Selected;
+    }
     public void Action(string name, bool vrc)
     {
         Sync();
@@ -218,12 +231,13 @@ internal sealed class ToyControlSession : IDisposable
             case "InOwn": case "InRemote": case "InBoth": break;
         }
     }
-    public void StopAll()
+    public void StopAll(bool preserveSelection=false)
     {
+        var selection=preserveSelection ? Model.Functions.Where(r=>r.Selected && r.Connected).Select(r=>(r.Toy.Id,r.Function.Id)).ToHashSet() : [];
         if (bindings.Keys.Any(k=>k.Toy.StartsWith("remote/",StringComparison.Ordinal))) Log?.Invoke("Stop all ended the graph's remote toy inputs.");
         Shockers.Cancel();
         Model.Release(false); Model.StopAll(); controller?.Stop(); Remote?.Stop(); bindings.Clear(); Vrc.BlockTouch(); ClearRequested = true;
-        foreach (var row in Model.Functions) row.Function.Selected = false;
+        foreach (var row in Model.Functions) row.Function.Selected = row.Connected && selection.Contains((row.Toy.Id,row.Function.Id));
         Notice = "Stopped · use fresh input";
     }
     private void End((string Toy, string Function) key, bool reset)

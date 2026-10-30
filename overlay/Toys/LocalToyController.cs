@@ -189,7 +189,7 @@ internal sealed class LocalToyController : IAsyncDisposable, IToyInputController
         {
             ObjectDisposedException.ThrowIf(disposed, this);
             var state = Get(preference.DeviceKey, preference.ChannelId);
-            try { store.Save(preference); }
+            try { store.Save(preference, adapter.Snapshot.Devices.FirstOrDefault(device => device.DeviceKey == preference.DeviceKey)?.PersistentIdentity != false); }
             catch (Exception)
             {
                 failedDevices.Add(preference.DeviceKey);

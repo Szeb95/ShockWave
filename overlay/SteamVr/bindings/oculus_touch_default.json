@@ -1,0 +1,94 @@
+{
+  "description": "Trigger clicks and draws. Touch a floating side handle and hold grip to move it without pointing.",
+  "bindings": {
+    "/actions/panel": {
+      "chords": [],
+      "skeleton": [],
+      "poses": [
+        {
+          "path": "/user/hand/left/pose/tip",
+          "output": "/actions/panel/in/pose_left"
+        },
+        {
+          "path": "/user/hand/right/pose/tip",
+          "output": "/actions/panel/in/pose_right"
+        },
+        {
+          "path": "/user/hand/left/pose/handgrip",
+          "output": "/actions/panel/in/hand_left"
+        },
+        {
+          "path": "/user/hand/right/pose/handgrip",
+          "output": "/actions/panel/in/hand_right"
+        }
+      ],
+      "sources": [
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/panel/in/click_left"
+            }
+          },
+          "mode": "trigger",
+          "path": "/user/hand/left/input/trigger",
+          "parameters": {
+            "click_activate_threshold": "0.55",
+            "click_deactivate_threshold": "0.40"
+          }
+        },
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/panel/in/click_right"
+            }
+          },
+          "mode": "trigger",
+          "path": "/user/hand/right/input/trigger",
+          "parameters": {
+            "click_activate_threshold": "0.55",
+            "click_deactivate_threshold": "0.40"
+          }
+        },
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/panel/in/grip_left"
+            }
+          },
+          "mode": "trigger",
+          "path": "/user/hand/left/input/grip",
+          "parameters": {
+            "click_deactivate_threshold": "0.40",
+            "click_activate_threshold": "0.55"
+          }
+        },
+        {
+          "inputs": {
+            "click": {
+              "output": "/actions/panel/in/grip_right"
+            }
+          },
+          "mode": "trigger",
+          "path": "/user/hand/right/input/grip",
+          "parameters": {
+            "click_deactivate_threshold": "0.40",
+            "click_activate_threshold": "0.55"
+          }
+        }
+      ],
+      "haptics": [
+        {
+          "path": "/user/hand/left/output/haptic",
+          "output": "/actions/panel/out/haptic_left"
+        },
+        {
+          "path": "/user/hand/right/output/haptic",
+          "output": "/actions/panel/out/haptic_right"
+        }
+      ]
+    }
+  },
+  "action_manifest_version": 0,
+  "controller_type": "oculus_touch",
+  "name": "ShockWave panel oculus_touch defaults"
+}

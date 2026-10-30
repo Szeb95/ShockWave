@@ -126,7 +126,7 @@ namespace ShockWave.ToyControl
             GestureHelp(t,faint);
             return Save(t,folder+"/ShockerLabels.png");
         }
-        private static void GestureHelp(Texture2D texture,Color color) => Centered(texture,"Fist = grab handle   |   Finger gun = point   |   Curl index (thumbs up) = click",new Rect(365,677,839,26),14,color);
+        private static void GestureHelp(Texture2D texture,Color color) => Centered(texture,"Fist at handle = grab   |   Point / finger gun = aim   |   Fist / thumbs up = click",new Rect(365,677,839,26),14,color);
         private static Texture2D Status(string folder)
         {
             var t=Blank(232*TextScale,160*TextScale); var accent=new Color(24/255f,185/255f,145/255f); var faint=new Color(181/255f,186/255f,193/255f);

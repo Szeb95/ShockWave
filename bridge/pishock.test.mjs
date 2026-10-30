@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import http from 'node:http';
 import { once } from 'node:events';
 import WebSocket from 'ws';
-import { startBridge, normalizeConfig, validateConfig } from './bridge.mjs';
+// The optional URL lets the same fault fixtures exercise an actual packaged
+// bridge with its bundled Node runtime; ordinary source/CI runs use this folder.
+const { startBridge, normalizeConfig, validateConfig } = await import(process.env.SHOCKWAVE_TEST_BRIDGE_URL ?? './bridge.mjs');
 import { readPiShockDevices, piShockPublish } from './pishock.mjs';
 import { encodeOsc } from './osc.mjs';
 import base from './config.example.json' with { type: 'json' };
@@ -25,22 +27,27 @@ const shared = { fixtureOwner: [{ clientId: 43, shockerId: 8, shareId: 30, shock
   maxIntensity: 25, maxDuration: 2, canShock: false, canVibrate: true, canBeep: true, canLog: false, shareCode: 'fixture-share-secret' }] };
 
 async function fixture(input = settings(), extra = {}) {
-  const logs = [], requests = [], commands = [], subscriptions = [], connections = [];
+  const logs = [], requests = [], requestDetails = [], socketDetails = [], commands = [], subscriptions = [], connections = [];
   let mode = 'success', readStatus = 200, authValid = true, ownData = structuredClone(owned), shareData = structuredClone(shared);
+  let accountData = { UserId: 11, Username: 'fixture-canonical-user', EmailAddresses: [], OAuthLinks: [] };
   let bridge, clock = Date.now();
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost'); requests.push(url.pathname);
+    requestDetails.push({ path: url.pathname, search: url.search, headers: { ...req.headers } });
     res.setHeader('Content-Type', 'application/json');
     if (readStatus !== 200) { res.writeHead(readStatus, { 'Retry-After': '2' }); res.end('{"private":"fixture-key fixture-share-secret"}'); return; }
-    const response = url.pathname.endsWith('GetUserIfAPIKeyValid') ? authValid ? { UserID: 11 } : false
+    if (url.pathname === '/Account' && !authValid) { res.writeHead(401); res.end('{"echo":"fixture-key fixture-share-secret"}'); return; }
+    const response = url.pathname === '/Account' ? accountData
       : url.pathname.endsWith('GetUserDevices') ? ownData
       : url.pathname.endsWith('GetShareCodesByOwner') ? { fixtureOwner: [30] }
       : url.pathname.endsWith('GetShockersByShareIds') ? shareData : null;
+    if (response === null) { res.writeHead(404); res.end(); return; }
     res.end(JSON.stringify(response));
   });
   const ws = new WebSocket.Server({ server });
-  ws.on('connection', socket => {
+  ws.on('connection', (socket, request) => {
     connections.push(socket);
+    socketDetails.push(new URL(request.url, 'http://localhost'));
     socket.on('message', data => {
       const command = JSON.parse(data.toString());
       if (command.Operation === 'PING') { if (mode !== 'no-pong') socket.send(JSON.stringify({ ErrorCode: null, IsError: false, Message: 'PONG', OriginalCommand: 'PING' })); }
@@ -57,11 +64,12 @@ async function fixture(input = settings(), extra = {}) {
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const address = `http://127.0.0.1:${server.address().port}`;
   bridge = await startBridge(input, 'fixture-key', { log: line => logs.push(line), externalOsc: true, now: () => clock,
-    commandTimeoutMs: 100, piShockUrls: { auth: address, api: address, broker: address.replace('http:', 'ws:') + '/v2' }, ...extra });
+    commandTimeoutMs: 100, piShockUrls: { account: address, api: address, broker: address.replace('http:', 'ws:') + '/v2' }, ...extra });
   const status = () => JSON.parse(logs.findLast(line => line.startsWith('@api ')).slice(5));
-  return { bridge, logs, requests, commands, subscriptions, connections, status,
+  return { bridge, logs, requests, requestDetails, socketDetails, commands, subscriptions, connections, status,
     mode: value => { mode = value; }, advance: ms => { clock += ms; }, httpStatus: value => { readStatus = value; }, auth: value => { authValid = value; },
     shares: value => { shareData = value; }, own: value => { ownData = value; },
+    account: value => { accountData = value; },
     ready: () => until(() => status().connection.state === 'Connected'),
     close: async () => { bridge(); for (const socket of connections) socket.terminate(); await new Promise(resolve => ws.close(resolve)); await new Promise(resolve => server.close(resolve)); },
   };
@@ -128,6 +136,48 @@ test('cloud discovery, correlated acceptance and feedback never expose keys/shar
   } finally { await f.close(); }
 });
 
+test('current account API replaces the removed auth lookup and keeps the key out of its URL', async () => {
+  const f = await fixture({ ...settings(), piShockUsername: 'older-account-name' });
+  try {
+    await f.ready();
+    const account = f.requestDetails.find(request => request.path === '/Account');
+    assert.equal(account.headers['x-pishock-api-key'], 'fixture-key');
+    assert.equal(account.search, '');
+    assert.ok(!f.requests.some(route => route.includes('GetUserIfAPIKeyValid')));
+    assert.equal(f.socketDetails[0].searchParams.get('Username'), 'fixture-canonical-user');
+    assert.equal(f.socketDetails[0].searchParams.get('ApiKey'), 'fixture-key');
+    const ownRequest = f.requestDetails.find(request => request.path.endsWith('GetUserDevices'));
+    assert.equal(new URLSearchParams(ownRequest.search).get('UserId'), '11');
+    assert.equal(f.commands.length, 0, 'account validation never activates a device');
+    assert.ok(!f.logs.join('\n').includes('fixture-key'));
+  } finally { await f.close(); }
+});
+
+test('a failed lookup identifies the request stage and does not echo credential-bearing responses', async () => {
+  const f = await fixture();
+  try {
+    await f.ready(); f.httpStatus(404); await f.bridge.refreshDevices();
+    assert.match(f.status().connection.detail, /account lookup failed \(HTTP 404\)/);
+    assert.equal(f.status().connection.statusCode, 404);
+    assert.ok(!f.logs.join('\n').includes('fixture-key'));
+    assert.equal(await f.bridge.control('pi-own', 'Vibrate'), false);
+    assert.equal(f.commands.length, 0);
+  } finally { await f.close(); }
+});
+
+test('account identity validates schema/camel casing and rejects conflicting or malformed identity fields', async () => {
+  const f = await fixture();
+  try {
+    await f.ready(); f.account({ userId: 11, username: 'fixture-canonical-user' });
+    await f.bridge.refreshDevices(); await f.ready();
+    f.account({ UserId: 11, userId: 12, Username: 'fixture-canonical-user' });
+    await f.bridge.refreshDevices(); assert.equal(f.status().connection.state, 'Error');
+    assert.match(f.status().connection.detail, /account lookup response/);
+    assert.equal(await f.bridge.control('pi-own', 'Vibrate'), false);
+    assert.equal(f.commands.length, 0);
+  } finally { await f.close(); }
+});
+
 test('PiShock rejects, lost acknowledgements, unrelated acknowledgements and disconnects never retry', async () => {
   for (const mode of ['reject', 'drop', 'wrong-ack', 'disconnect']) {
     const f = await fixture();
@@ -161,7 +211,7 @@ test('Test mode previews without sends, activity notices or OpenShock requests',
     assert.equal(await f.bridge.control('pi-own', 'Shock'), true);
     assert.equal(f.commands.length, 0); assert.ok(f.logs.some(line => line.includes('TEST ONLY')));
     assert.ok(!f.logs.some(line => line.startsWith('@activity ')));
-    assert.ok(f.requests.every(path => path.startsWith('/Auth/') || path.startsWith('/PiShock/')));
+    assert.ok(f.requests.every(path => path === '/Account' || path.startsWith('/PiShock/')));
   } finally { await f.close(); }
 });
 

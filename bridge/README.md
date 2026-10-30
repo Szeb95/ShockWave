@@ -1,6 +1,10 @@
 # PiCtrl OSC ↔ OpenShock bridge
 
+Developer navigation: [code map and focused checks](../docs/CODE-MAP.md). `bridge.mjs` remains the CLI/import entry point; configuration rules, OpenShock HTTP/log helpers and the OpenShock runtime now live in separate modules. Existing exports and message formats are preserved.
+
 ## PiShock provider — 2026-10-18
+
+Login endpoint correction (2026-10-24): use `GET https://api.pishock.com/Account` with `X-PiShock-Api-Key`, as defined by PiShock's current OpenAPI `GetAccountEndpoint`/`GetAccountResponse` (`UserId`, `Username`). The old documented `auth.pishock.com/Auth/GetUserIfAPIKeyValid` lookup is removed and returns 404 even before discovery. The bridge uses the account's canonical username for the broker and identifies failed lookup stages in sanitized errors. No persisted credential/configuration, device command, retry or replay contract changes. The old prose documentation is insufficient for this account lookup; see [current schema](https://api.pishock.com/swagger/v1/swagger.json).
 
 The bridge also supports **PiShock** through its documented account API and authenticated WebSocket v2 broker, with no separate application. `provider` defaults to `OpenShock` when missing. PiShock selects `piShockShockers`, `piShockSelfTestEnabled` and `piShockSelfTestShockerKeys`, with `piShockUsername` and the separate `PISHOCK_API_KEY` environment variable. Cards use numeric `hub/shocker[/share]` identifiers in `uuid`; share codes are discovered in memory, never saved in configuration or exposed over stdout. OpenShock's original fields, token context and command path remain intact. The packaged app supplies only the active service's secret. PiShock requires the existing bundled Node runtime (22+ for the built-in WebSocket); no new dependency was added.
 

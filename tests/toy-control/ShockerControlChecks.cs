@@ -234,6 +234,6 @@ internal static class ShockerControlChecks
         var state=ShaderState.From(s.Model,1240,608,(float)now,0,0);
         state.ShockData=new(1,s.Intensity/100f,(s.DurationMs-300)/14700f,0);state.ShockFlags=new(0,s.Ready ? 1 : 0,0,0);
         renderer.Render(state,false);using var image=renderer.Capture();image.Save(Path.Combine(artifacts,"shocker-multiple.png"));
-        check(renderer.CompileError is null,"multi-selected shocker desktop renders through production HLSL");
+        check(renderer.CompileError is null,"historical HLSL fixture renders the multi-selected shocker layout");
     }
 }

@@ -17,6 +17,14 @@ internal static class Program
             return;
         }
         ApplicationConfiguration.Initialize();
+        if(args.Length==2 && args[0]=="--panel-self-test")
+        {
+            Environment.ExitCode=SteamVr.PanelIntegrationChecks.Run(Path.GetFullPath(args[1]));return;
+        }
+        if(args.Length==2 && args[0]=="--panel-hidden-vr-check")
+        {
+            Environment.ExitCode=SteamVr.VrHiddenCheck.Run(Path.GetFullPath(args[1]));return;
+        }
         if (Updates.UpdateInstaller.IsInstalling(AppContext.BaseDirectory))
         {
             MessageBox.Show("An update is finishing. Wait a moment, then open ShockWave again.", "ShockWave update", MessageBoxButtons.OK, MessageBoxIcon.Information);

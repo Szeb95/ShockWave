@@ -1,165 +1,207 @@
-using System.Diagnostics;
 using ShockWave.ShaderLab;
+using ShockWave.Overlay.SteamVr;
+using NativeModel = ShockWave.Overlay.SteamVr.PanelModel;
 
 namespace ShockWave.Overlay;
 
 internal sealed class ToyControlPage : UserControl
 {
-    private sealed class Surface : Control
-    {
-        public Surface() { SetStyle(ControlStyles.Opaque | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint,true); }
-        protected override void OnPaintBackground(PaintEventArgs e) { }
-        protected override void OnPaint(PaintEventArgs e) { }
-    }
-    private readonly Surface surface = new();
-    private readonly Panel canvas = new() { Dock=DockStyle.Fill };
-    private readonly Label notice = new() { Dock=DockStyle.Bottom, Height=58, ForeColor=Color.FromArgb(181,186,193) };
-    private readonly Button retry = new() { Text="Reconnect VRC", FlatStyle=FlatStyle.Flat, BackColor=Color.FromArgb(56,58,64), ForeColor=Color.White, Size=new(135,32) };
-    private readonly Label title=new() { Text="Toy control", ForeColor=Color.White, Font=new Font("Segoe UI",21,FontStyle.Bold), Bounds=new(0,0,350,42) };
-    private readonly System.Windows.Forms.Timer timer = new() { Interval=33 };
+    private readonly NativeModel panelModel;
+    private readonly PanelInput input;
+    private readonly SteamVrHost vr;
+    private readonly DesktopPanelCanvas surface;
+    private readonly Label notice=new() {Dock=DockStyle.Bottom,Height=64,ForeColor=Color.FromArgb(181,186,193)};
+    private readonly System.Windows.Forms.Timer timer=new() {Interval=10};
+    private readonly DisplayCadence controlCadence=new(1d/30),displayCadence=new(1d/30);
+    private readonly DisplayCadence sliderDisplayCadence=new(1d/60);
     private readonly Action<byte[],OscMessage[]> forward;
-    private PanelRenderWorker? renderer;
-    private readonly Func<nint,IPanelFrameRenderer> createRenderer;
-    private ToyControlLabels.Frame? labels;
     private ToyOscRouter? osc;
-    private int listenPort=9001, sendPort=9000, hover, labelsRevision=-1, inputModeRevision=-1;
-    private string listenHost="127.0.0.1";
-    private double lastLabels, lastHistory;
-    private long lastGraphicsReport=Environment.TickCount64,maximumControlWork,maximumDisplayWork;
-    private long inputRevision,labelsInputRevision=-1;
-    private string inputLayout="";
-    private string lastStatus="", error="";
-    private bool drawing, closed;
-    private int slider;
-    public ToyControlSession Session { get; }
-    public bool Listening => osc is { Fault:null } && timer.Enabled && !closed;
-    public bool Connected => Listening && Session.Vrc.IsLive;
+    private int listenPort=9001,sendPort=9000;
+    private string listenHost="127.0.0.1",error="",lastStatus="";
+    private bool closed;
+    internal Func<NativeModel,string,Bitmap> RenderFrame {get;set;}=PanelView.Render;
+    internal Func<DesktopPanelFrame,Bitmap> RenderDesktopFrame {get;set;}=DesktopPanelView.Render;
+    private RasterPanelWorker? renderer;
+    private DesktopPanelWorker? desktopRenderer;
+    private readonly List<DesktopSample> history=[];
+    private bool desktopPressed,drawing;
+    private int slider,hover,clearRevision=-1;
+    private double lastHistory;
+    private readonly VrAutoOpen startup=new();
+    private Mount preferredHand;
+    private bool startAsPanel,autoOpenInVr;
+    internal Func<bool> OpenVrAction {get;set;}
+    internal Func<bool> VrAvailable {get;set;}=SteamVrAvailable;
+    internal bool AutoOpenPending=>startup.Pending;
+    public string PreferredHand=>preferredHand==Mount.RightHand ? "Right" : "Left";
+    public string PreferredStartMode=>startAsPanel ? "Panel" : "Wrist";
+    public bool AutoOpenInVr=>autoOpenInVr;
+    public ToyControlSession Session {get;}
+    internal NativeModel Panel => panelModel;
+    internal PanelInput Input => input;
+    internal DesktopPanelCanvas DesktopSurface=>surface;
+    internal bool DesktopReady=>surface.PaintedCookie.Length>0 && surface.PaintedCookie==DesktopPanelView.InputCookie(Session);
+    public bool Listening => osc is {Fault:null} && timer.Enabled && !closed;
+    public bool Connected => vr.Running || Listening && Session.Vrc.IsLive;
     public int AvatarPort => sendPort;
-    public string Status => error.Length>0 ? error : osc?.Fault ?? (Connected ? "Connected" : Listening ? Session.Vrc.WaitingReason : "Inactive");
+    public string Status => error.Length>0 ? error : vr.Running ? vr.Status : osc?.Fault ?? (Connected ? "Connected" : Listening ? Session.Vrc.WaitingReason : "Inactive");
     public event Action? Changed;
     internal event Action<string>? Diagnostic;
-    public event Action<OscMessage, double>? OscInput;
+    public event Action<OscMessage,double>? OscInput;
     public event Action? OscReset;
-    public Func<bool>? SpsPresence { get; set; }
-    public ToyControlPage(LocalToysPage toys, Action<byte[],OscMessage[]> forward,Func<nint,IPanelFrameRenderer>? initialRenderer=null)
+    public Func<bool>? SpsPresence {get;set;}
+    public ToyControlPage(LocalToysPage toys,Action<byte[],OscMessage[]> forward,WristPlacementStore? placementStore=null)
     {
-        this.forward=forward; createRenderer=initialRenderer ?? (handle=>new GpuPanelFrameRenderer(Path.Combine(AppContext.BaseDirectory,"ToyControl","Shaders","Panel.hlsl"),handle));
-        Session=new(() => toys.Snapshot,() => toys.Controller);
-        Dock=DockStyle.Fill; BackColor=Color.FromArgb(30,31,34);
-        var header=new Panel { Dock=DockStyle.Top, Height=65 };
-        header.Controls.AddRange([title,retry]); header.Resize+=(_,_) => retry.Location=new(Math.Max(0,header.Width-retry.Width),4);
-        retry.FlatAppearance.BorderSize=0; retry.Click+=(_,_) => ConfigureOsc(listenPort,sendPort,listenHost);
-        Controls.Add(canvas); Controls.Add(notice); Controls.Add(header); canvas.Controls.Add(surface); canvas.Resize+=(_,_) => Arrange();
-        surface.HandleDestroyed+=(_,_)=>{renderer?.Dispose();renderer=null;labels=null;labelsRevision=-1;};
-        surface.MouseDown+=(_,e) =>
+        this.forward=forward;Session=new(()=>toys.Snapshot,()=>toys.Controller);
+        panelModel=new(Session,(toy,function)=>
         {
-            if(e.Button!=MouseButtons.Left) return;
-            var p=Logical(e.Location);
-            // Stop has the same fixed position on both pages and never waits for graphics.
-            if(ToyControlLayout.Stop.Contains(p)) {StopRenderingTouch();Session.StopAll();return;}
-            Session.Tick(ToyOscRouter.Clock);
-            if(renderer?.AcceptsInput(CurrentInputRevision())!=true) return;
-            var hit=ToyControlLayout.Hit(p,Session);
-            if(Session.ShockerPage) { surface.Capture=true; Session.Shockers.Press(0,hit,ToyOscRouter.Clock); }
-            if(hit is 30 or 31) { slider=hit; surface.Capture=true; Session.Slider(p,hit); }
-            if(hit==10) { drawing=true; surface.Capture=true; Session.Draw(p,false,true); }
-            else if(hit is >=1 and <=7 && !Session.ShockerPage) Session.Action("InRow"+(hit-1),false);
-            else if(ToyControlLayout.Action(hit) is { } action) Session.Action(action,false);
-        };
-        surface.MouseMove+=(_,e) =>
-        {
-            var p=Logical(e.Location); hover=ToyControlLayout.Hit(p,Session); surface.Cursor=hover!=0 ? Cursors.Hand : Cursors.Default;
-            if(slider!=0) Session.Slider(p,slider);
-            if(drawing) { if(PanelLayout.Graph.Contains(p)) Session.Draw(p,false); else Release(false); }
-        };
-        surface.MouseUp+=(_,e) => { if(e.Button==MouseButtons.Left) { Session.Shockers.Release(0); slider=0; if(drawing) Release(true); else surface.Capture=false; } };
-        surface.MouseCaptureChanged+=(_,_) => { if(!surface.Capture) { slider=0; Session.Shockers.Release(0); if(drawing) Release(false); } };
-        surface.MouseWheel+=(_,e) => { if(!drawing) Session.Action(e.Delta<0 ? "InNext" : "InPrev",false); };
-        timer.Tick+=(_,_) => Tick();
-    }
-    private PointF Logical(Point point) => new(point.X*1240f/Math.Max(1,surface.Width),100+point.Y*608f/Math.Max(1,surface.Height));
-    private long CurrentInputRevision()
-    {
-        var model=Session.DisplayModel;
-        // A skipped picture must never make a click select/control a different
-        // target than the visible rows/page. Only an opaque cookie leaves the UI.
-        var layout=System.Text.Json.JsonSerializer.Serialize(new {
-            Session.ShockerPage,Session.InputModeRevision,model.Page,model.Route,
-            Rows=model.Visible.Select(row=>new {Toy=row.Toy.Id,Function=row.Function.Id,row.Connected}).ToArray(),
-            Selected=model.Functions.Where(row=>row.Selected).Select(row=>new {Toy=row.Toy.Id,Function=row.Function.Id}).ToArray(),
-            Shocker=Session.ShockerPage ? new {Session.Shockers.Intensity,Session.Shockers.DurationMs,Session.Shockers.Armed,Session.Shockers.Ready} : null
+            var device=(toy.StartsWith("remote/",StringComparison.Ordinal) ? Session.Remote?.Snapshot : toys.Snapshot)?.Devices.FirstOrDefault(d=>d.DeviceKey==toy);
+            var capability=device?.Capabilities.FirstOrDefault(c=>c.ChannelId==function);
+            try
+            {
+                var state=(toy.StartsWith("remote/",StringComparison.Ordinal) ? (Toys.IToyInputController?)Session.Remote : toys.Controller)?.State(toy,function);
+                return (capability?.Type.ToString() ?? "Unknown",state?.Preference.Sensitivity ?? 100);
+            }
+            catch(InvalidOperationException) {return (capability?.Type.ToString() ?? "Unknown",100);}
         });
-        if(layout!=inputLayout) {inputLayout=layout;inputRevision++;}
-        return inputRevision;
+        input=new(panelModel,()=>desktopPressed || drawing || slider!=0);vr=new(panelModel,input,placementStore ?? new WristPlacementStore(null));panelModel.SetMount(vr.SavedWrist);
+        preferredHand=vr.SavedWrist;OpenVrAction=StartVr;
+        surface=new() {Dock=DockStyle.Fill};
+        Dock=DockStyle.Fill;BackColor=Color.FromArgb(30,31,34);
+        Controls.Add(surface);Controls.Add(notice);
+        panelModel.LayoutChanged+=()=>{input.CancelPointer();vr.PlacementChanged();displayCadence.Reset();};
+        panelModel.PlacementChanged+=vr.PlacementChanged;
+        panelModel.ContextInvalidated+=()=>input.CancelPointer();
+        Session.PageChanged+=()=>{CancelDesktopInput();panelModel.Tick(ToyOscRouter.Clock);};
+        surface.MouseDown+=(_,e)=>DesktopDown(e);
+        surface.MouseMove+=(_,e)=>DesktopMove(e);
+        surface.MouseLeave+=(_,_)=>{hover=0;surface.Cursor=Cursors.Default;displayCadence.Reset();};
+        surface.MouseUp+=(_,e)=>{if(e.Button==MouseButtons.Left) ReleaseDesktopInput(true);};
+        surface.MouseCaptureChanged+=(_,_)=>{if(!surface.Capture) CancelDesktopInput();};
+        surface.MouseWheel+=(_,e)=>{if(!desktopPressed && !input.PointerActive) Session.Action(e.Delta<0 ? "InNext" : "InPrev",false);};
+        timer.Tick+=(_,_)=>Tick();
     }
-    private void Arrange()
+    public void ConfigureVrOptions(string? hand,string? mode,bool autoOpen)
     {
-        var width=Math.Max(1,Math.Min(canvas.Width,(int)(canvas.Height*1240f/608))); var height=Math.Max(1,(int)(width*608f/1240));
-        surface.SetBounds(Math.Max(0,(canvas.Width-width)/2),0,width,height);
+        var nextHand=hand=="Right" ? Mount.RightHand : hand=="Left" ? Mount.LeftHand : preferredHand;
+        var nextPanel=mode=="Panel";var changed=preferredHand!=nextHand || startAsPanel!=nextPanel;
+        preferredHand=nextHand;startAsPanel=nextPanel;autoOpenInVr=autoOpen;
+        if(!autoOpen) startup.Cancel();
+        if(changed) ApplyPreferredPlacement();
     }
-    private void Release(bool commit) { drawing=false; surface.Capture=false; Session.Release(commit); }
-    public void ConfigureOsc(int listen, int send, string host="127.0.0.1")
+    private void ApplyPreferredPlacement()
     {
-        if(closed) return; listenPort=listen; sendPort=send; listenHost=host;
-        OscReset?.Invoke();
-        Session.Vrc.Reset("Waiting for VRC"); osc?.Dispose(); osc=null; error="";
-        try { osc=new(listen,send,host); }
-        catch(System.Net.Sockets.SocketException) { error=$"OSC port {listen} is in use. Close Shader Lab or another OSC receiver, then Reconnect VRC."; }
-        timer.Start(); UpdateStatus();
+        if(panelModel.Compact==!startAsPanel && panelModel.WristHand==preferredHand) return;
+        panelModel.SetMount(preferredHand);if(startAsPanel) panelModel.SetCompact(false);
     }
+    private bool StartVr() {if(vr.Running) return true;ApplyPreferredPlacement();Prepare();return vr.Start();}
+    public bool OpenInVr() {startup.Cancel();ApplyPreferredPlacement();return OpenVrAction();}
+    public void CloseVr() {startup.Cancel();vr.Dispose();}
+    public void RecallVr() {CancelDesktopInput();vr.Recall();}
+    public void OpenWristMenu()=>vr.OpenWristMenu();
+    public void AdjustWristPosition()=>vr.AdjustWristPosition();
+    public void ReconnectVrc()=>ConfigureOsc(listenPort,sendPort,listenHost);
+    public void StartWithApp()=>startup.Arm(autoOpenInVr);
+    private static bool SteamVrAvailable()
+    {var processes=System.Diagnostics.Process.GetProcessesByName("vrserver");try {return processes.Length>0;} finally {foreach(var process in processes) process.Dispose();}}
+    public void SetTransparency(int value) {panelModel.SetTransparency(value);displayCadence.Reset();}
+    public void ConfigureOsc(int listen,int send,string host="127.0.0.1")
+    {
+        if(closed) return;listenPort=listen;sendPort=send;listenHost=host;OscReset?.Invoke();
+        Session.Vrc.Reset("Waiting for VRC");osc?.Dispose();osc=null;error="";
+        try {osc=new(listen,send,host);}
+        catch(System.Net.Sockets.SocketException) {error=$"OSC port {listen} is in use. Close the other receiver, then Reconnect VRC.";}
+        timer.Start();UpdateStatus();
+    }
+    private void Prepare() {var now=ToyOscRouter.Clock;Session.Tick(now);panelModel.Tick(now);}
+    private void DesktopDown(MouseEventArgs e)
+    {
+        if(e.Button!=MouseButtons.Left) return;var point=surface.Logical(e.Location);
+        if(DesktopPanelLayout.IsStop(point)) {CancelDesktopInput();input.CancelPointer();panelModel.StopAll(clearSelection:true);return;}
+        Session.Tick(ToyOscRouter.Clock);
+        var hit=DesktopPanelLayout.Hit(point,Session);
+        if(hit==DesktopPanelLayout.RecenterHit) {RecallVr();return;}
+        if(!DesktopReady || input.PointerActive || desktopPressed) return;
+        if(hit==0) return;
+        if(hit==DesktopPanelLayout.OpenVrHit) {OpenInVr();return;}
+        if(hit==DesktopPanelLayout.ShockHit && Session.Shockers.Armed && !Session.Shockers.ArmedFromDesktop) {Session.Shockers.Cancel();return;}
+        desktopPressed=true;surface.Capture=true;
+        if(Session.ShockerPage) Session.Shockers.Press(0,hit==DesktopPanelLayout.ShockHit ? Session.Shockers.ArmedFromDesktop ? 33 : 32 : hit,ToyOscRouter.Clock);
+        if(hit is 30 or 31) {slider=hit;SetDesktopSlider(point,hit);}
+        if(hit==10) {drawing=true;Session.Draw(ClampedGraph(point),false,true);}
+        else if(hit is >=1 and <=7 && !Session.ShockerPage) Session.Action("InRow"+(hit-1),false);
+        else if(ToyControlLayout.Action(hit) is { } action) Session.Action(action,false);
+    }
+    private static PointF ClampedGraph(PointF point)
+    {
+        var graph=ShockWave.ShaderLab.PanelLayout.Graph;return new(Math.Clamp(point.X,graph.Left,graph.Right),Math.Clamp(point.Y,graph.Top,graph.Bottom));
+    }
+    private void SetDesktopSlider(PointF point,int hit)
+    {
+        var rect=DesktopPanelLayout.Slider(hit-30);
+        Session.Shockers.SetSlider(hit,Math.Clamp(1-(point.Y-rect.Top)/rect.Height,0,1));
+    }
+    private void DesktopMove(MouseEventArgs e)
+    {
+        var point=surface.Logical(e.Location);hover=DesktopPanelLayout.Hit(point,Session);surface.Cursor=hover!=0 ? Cursors.Hand : Cursors.Default;
+        if(slider!=0) SetDesktopSlider(point,slider);
+        if(drawing && Session.Model.Touching && !Session.TouchFromVrc) Session.Draw(ClampedGraph(point),false);
+    }
+    private void ReleaseDesktopInput(bool commit)
+    {
+        var wasDrawing=drawing;drawing=desktopPressed=false;slider=0;Session.Shockers.Release(0);
+        if(wasDrawing && !Session.TouchFromVrc) Session.Release(commit);
+        surface.Capture=false;
+    }
+    private void CancelDesktopInput()=>ReleaseDesktopInput(false);
     internal void Tick()
     {
         if(closed) return;
         try
         {
-            if(renderer?.Failure is not null) throw new InvalidOperationException("Panel graphics unavailable");
-            var started=Stopwatch.GetTimestamp();
-            osc?.Tick(Session,forward,(message,now) => OscInput?.Invoke(message,now)); var now=ToyOscRouter.Clock; Session.Tick(now);
-            osc?.SendSpsPresence(SpsPresence?.Invoke() ?? false); osc?.Send(Session);
-            maximumControlWork=Math.Max(maximumControlWork,(long)Math.Ceiling(Stopwatch.GetElapsedTime(started).TotalMilliseconds));
-            started=Stopwatch.GetTimestamp();
-            var form=FindForm(); var draw=Visible && IsHandleCreated && form is { Visible:true,WindowState:not FormWindowState.Minimized } && surface.Width>1 && surface.Height>1;
-            if(draw)
+            var now=ToyOscRouter.Clock;
+            if(controlCadence.Due(now))
             {
-                if(renderer is null) {var handle=surface.Handle;var create=createRenderer;renderer=new(()=>create(handle));}
-                var state=ShaderState.From(Session.DisplayModel,surface.Width,surface.Height,(float)now,hover,osc?.Received ?? 0);
-                state.ShockData=new(Session.ShockerPage ? 1 : 0,Session.Shockers.Intensity/100f,(Session.Shockers.DurationMs-300)/14700f,Session.Shockers.Remaining(now));
-                state.ShockFlags=new(Session.Shockers.Armed ? 1 : 0,Session.Shockers.Ready ? 1 : 0,0,0);
-                var stepHistory=now-lastHistory>=1/30d;if(stepHistory) lastHistory=now;
-                var currentInput=CurrentInputRevision();
-                if(labelsInputRevision!=currentInput || now-lastLabels>=.05 && (labelsRevision!=Session.DisplayModel.Revision+Session.Shockers.Revision || inputModeRevision!=Session.InputModeRevision || now-lastLabels>=1))
-                { labels=ToyControlLabels.Capture(Session); labelsRevision=Session.DisplayModel.Revision+Session.Shockers.Revision; inputModeRevision=Session.InputModeRevision; labelsInputRevision=currentInput; lastLabels=now; }
-                labels ??= ToyControlLabels.Capture(Session);
-                renderer.Submit(new(surface.Width,surface.Height,state,Session.ClearRevision,Session.Model.DisplayPattern,
-                    Session.Model.Functions.Select(row=>row.Connected ? row.Function.Pattern : null).ToArray(),labels,stepHistory,currentInput));
-                Session.ClearRequested=false;
+                osc?.Tick(Session,forward,(message,time)=>OscInput?.Invoke(message,time));Session.Tick(now);
+                osc?.SendSpsPresence(SpsPresence?.Invoke() ?? false);osc?.Send(Session);
             }
-            else renderer?.Pause();
-            maximumDisplayWork=Math.Max(maximumDisplayWork,(long)Math.Ceiling(Stopwatch.GetElapsedTime(started).TotalMilliseconds));
-            if(Environment.TickCount64-lastGraphicsReport>=5000)
+            if(startup.Pending && now>=startup.NextCheck) startup.Tick(now,VrAvailable(),()=>OpenVrAction());
+            panelModel.Tick(now);vr.Tick();
+            if(drawing && (!Session.Model.Touching || Session.TouchFromVrc)) CancelDesktopInput();
+            if(renderer?.Failure is not null || desktopRenderer?.Failure is not null) throw new InvalidOperationException("Panel display unavailable");
+            if(renderer?.TryTake(out var readyFrame,out var stamp)==true && readyFrame is not null)
             {
-                var metrics=renderer?.TakeMetrics() ?? default;
-                if(metrics.MaximumFrameMs>=100 || metrics.Skipped>0 || maximumControlWork>=100 || maximumDisplayWork>=100)
-                    Diagnostic?.Invoke($"Panel display 5s: frames {metrics.Frames}, skipped {metrics.Skipped}, max graphics {metrics.MaximumFrameMs} ms; control work {maximumControlWork} ms, display snapshot {maximumDisplayWork} ms.");
-                lastGraphicsReport=Environment.TickCount64;maximumControlWork=maximumDisplayWork=0;
+                using(readyFrame)
+                    if(vr.Running && panelModel.CanDisplay(stamp)) {vr.Upload(readyFrame);if(vr.Running) panelModel.MarkPresented(stamp.Input);}
             }
+            if(desktopRenderer?.TryTake(out var desktopFrame,out var desktopCookie)==true && desktopFrame is not null)
+            {if(desktopCookie==DesktopPanelView.InputCookie(Session)) surface.SetFrame(desktopFrame,desktopCookie);else desktopFrame.Dispose();}
+            var form=FindForm();var draw=Visible && IsHandleCreated && form is {Visible:true,WindowState:not FormWindowState.Minimized};
+            var cadence=input.PointerOwner is { } owner && input.IsSliding(owner) ? sliderDisplayCadence : displayCadence;
+            if((draw || vr.Running) && cadence.Due(now))
+            {
+                if(Session.ClearRevision!=clearRevision) {history.Clear();clearRevision=Session.ClearRevision;}
+                if(now-lastHistory>=1d/30) {history.Add(new(now,Session.Model.Level,Session.Model.SelectedCount>0));history.RemoveAll(s=>s.Time<now-8);if(history.Count>240) history.RemoveAt(0);lastHistory=now;}
+                if(vr.Running) {renderer??=new(RenderFrame);renderer.Submit(panelModel.CaptureDisplay(),panelModel.CaptureFrameStamp());}
+                if(draw) {desktopRenderer??=new(RenderDesktopFrame);desktopRenderer.Submit(DesktopPanelView.Capture(Session,hover,history));Session.ClearRequested=false;}
+            }
+            UpdateStatus();
         }
         catch(Exception e) when(e is InvalidOperationException or IOException or System.Net.Sockets.SocketException or SharpGen.Runtime.SharpGenException)
-        { error="Toy control paused. Reconnect VRC or reopen the app."; Session.Suspend(); renderer?.Dispose(); renderer=null; timer.Stop(); }
-        UpdateStatus();
+        {error="Panel paused. Reconnect VRC to restart the display.";CancelDesktopInput();input.Cancel();Session.Suspend();vr.Dispose();renderer?.Dispose();renderer=null;desktopRenderer?.Dispose();desktopRenderer=null;timer.Stop();Diagnostic?.Invoke("Panel paused: "+e.GetType().Name);UpdateStatus();}
     }
     private void UpdateStatus()
     {
-        var current=Status;
-        title.Text=Session.ShockerPage ? "Shocker control" : "Toy control";
-        notice.Text=Session.ShockerPage ? Session.Shockers.Notice+"\nRight circle → release → left circle within 3 seconds. Sliders send no commands. Each owner's limits apply."
-            : (error.Length>0 ? error : osc?.Fault ?? (Listening && !Connected ? Session.Vrc.WaitingReason : Session.Notice))+"\nEach owner's Sensitivity and Max % apply. Desktop input replaces that function's VR loop.";
-        if(current==lastStatus) return; lastStatus=current; labelsRevision=-1; Changed?.Invoke();
+        var shockNotice=Session.Shockers.Armed ? Session.Shockers.ArmedFromDesktop ? "Release, then press Shock again within 3 seconds" : "Pending confirmation in the other view"
+            : Session.Shockers.Notice.Replace("start with the right circle","press Shock to start again").Replace("press the LEFT green circle","press Shock again");
+        notice.Text=(Session.ShockerPage ? shockNotice+"\nShock → release → Shock within 3 seconds. Sliders send no commands."
+            : Session.Notice+"\nEach owner's Sensitivity and Max % apply.")+"\n"+(startup.Pending ? "Waiting for SteamVR · automatic opening enabled" : vr.Status);
+        var status=Status;if(status==lastStatus) return;lastStatus=status;Changed?.Invoke();
     }
-    public void StopRenderingTouch() { if(drawing) Release(false); slider=0; Session.Shockers.Release(0); Session.Shockers.Cancel(); }
+    public void StopRenderingTouch() {CancelDesktopInput();if(!Session.Shockers.ArmedFromNative) Session.Shockers.Cancel();if(input.IsPointerOwnedBy("desktop")) input.CancelPointer("desktop");panelModel.CancelDesktopConfirmation();}
     public void Shutdown()
     {
-        if(closed) return; closed=true; timer.Stop(); OscReset?.Invoke(); Session.Dispose(); osc?.Dispose(); osc=null; renderer?.Dispose(); renderer=null;
+        if(closed) return;closed=true;startup.Cancel();timer.Stop();CancelDesktopInput();input.Cancel();vr.Dispose();renderer?.Dispose();renderer=null;desktopRenderer?.Dispose();desktopRenderer=null;OscReset?.Invoke();Session.Dispose();osc?.Dispose();osc=null;
     }
-    protected override void Dispose(bool disposing) { if(disposing) { Shutdown(); timer.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) {if(disposing) {Shutdown();timer.Dispose();}base.Dispose(disposing);}
 }

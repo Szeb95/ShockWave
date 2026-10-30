@@ -111,7 +111,19 @@ internal static class Program
         var destination = Path.Combine(root, "extracted"); var zip = Zip(source);
         var payload = UpdatePackage.Extract(zip, destination, Next);
         Check(File.Exists(Path.Combine(destination, "ShockWave.exe")) && payload.Manifest.Files.Count == 6, "complete package extracts and hashes verify");
-        Reject(() => UpdatePackage.Extract(zip, Path.Combine(root, "wrong-version"), new(0, 8, 0)), "package version must match release");
+        var vrSource = DirectoryFor("steamvr-payload"); var vrManifest = MakePackage(vrSource, NextText);
+        string[] vrFiles = ["app.vrmanifest", "openvr_api.dll", "openvr-version.json", "build-info.json", "STEAMVR.md", "INTIFACE-PHONE.md", "bindings/actions.json", "bindings/oculus_touch_default.json"];
+        foreach (var path in vrFiles)
+        {
+            var target = Path.Combine(vrSource, path); Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.WriteAllText(target, "isolated-SteamVR-fixture");
+        }
+        vrManifest = vrManifest with { Files = vrManifest.Files.Concat(vrFiles.Select(path => new UpdateFile(path, UpdatePackage.Hash(Path.Combine(vrSource, path))))).ToList() };
+        File.WriteAllText(Path.Combine(vrSource, UpdatePackage.ManifestName), JsonSerializer.Serialize(vrManifest, AppUpdater.Json));
+        var vrDestination = Path.Combine(root, "steamvr-extracted"); UpdatePackage.Extract(Zip(vrSource), vrDestination, Next);
+        Check(vrFiles.All(path => File.Exists(Path.Combine(vrDestination, path))), "SteamVR library, input manifests, bindings and guides survive update extraction");
+        Check(!UpdatePackage.AllowedFile("bindings/injected.exe") && !UpdatePackage.AllowedFile("bindings/remote-friends.bin") && !UpdatePackage.AllowedFile("unexpected-root.json"), "SteamVR update additions do not allow arbitrary executables, private stores or unknown root files");
+        Reject(() => UpdatePackage.Extract(zip, Path.Combine(root, "wrong-version"), new(Next.Major, Next.Minor, Next.Build + 1)), "package version must match release");
         File.AppendAllText(Path.Combine(destination, "node.exe"), "tampered");
         Reject(() => UpdatePackage.VerifyPayload(destination, payload.Manifest), "staged file tampering is rejected");
         foreach (var path in new[] { "../escape", "/absolute", "C:/escape", "a\\b", "NUL.txt", "a/../b", "a/file:stream", "bridge/file. ", "bridge//file" })

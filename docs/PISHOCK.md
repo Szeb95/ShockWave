@@ -2,6 +2,8 @@
 
 PiShock connects directly from ShockWave to PiShock's cloud API. No additional desktop program is required. The PC and powered PiShock hub need internet access. The website is used for initial hub setup, API-key creation and account sharing; it does not need to remain open while ShockWave runs.
 
+**Login correction, 2026-10-24:** older builds used `auth.pishock.com/Auth/GetUserIfAPIKeyValid`, which is absent from PiShock's current published authentication schema and returns HTTP 404. The corrected bridge validates the key with `GET https://api.pishock.com/Account` and the `X-PiShock-Api-Key` header. Its response provides `UserId` and the canonical `Username` for device discovery/broker login. The key is absent from this lookup's URL; account email/OAuth metadata is neither logged nor saved. A 404 in the older build alone does not establish that your API key is invalid. Current contract: [PiShock OpenAPI schema](https://api.pishock.com/swagger/v1/swagger.json). Connection failures now name the failed account/device/share lookup without exposing credentials.
+
 ## Connect
 
 1. Generate an API key on your PiShock account page. The broker requires a key generated after 2024-10-15; create a new one if an old key is rejected.

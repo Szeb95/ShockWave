@@ -98,10 +98,24 @@ namespace ShockWave.ToyControl
                 var sm=Layer(c,"Pointer "+hand+" click");var inactive=State(sm,"Release before pointing",Clip(c,"Pointer "+hand+" idle",.1f));sm.defaultState=inactive;
                 var ready=State(sm,"Aim",Clip(c,"Pointer "+hand+" aim",.1f));var down=State(sm,"Click / draw",Clip(c,"Pointer "+hand+" press",.1f));
                 Driver(inactive,"InPointer"+hand+"Press",0);Driver(ready,"InPointer"+hand+"Press",0);Driver(down,"InPointer"+hand+"Press",1);
-                var gesture=hand=="L" ? "GestureLeft" : "GestureRight";var arm=Transition(inactive,ready);PointerReady(arm,hand);arm.AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
+                var gesture=hand=="L" ? "GestureLeft" : "GestureRight";var arm=Transition(inactive,ready);PointerReady(arm,hand);
+                arm.AddCondition(AnimatorConditionMode.NotEqual,1,gesture);arm.AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
                 foreach(var state in new[] {ready,down})
-                {foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(state,inactive),suffix,false);Transition(state,inactive).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,inactive).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");Transition(state,inactive).AddCondition(AnimatorConditionMode.Equals,hand=="L" ? 1 : 2,ToyControlContract.Prefix+"HoldingHand");}
-                Transition(ready,down).AddCondition(AnimatorConditionMode.Equals,7,gesture);Transition(down,ready).AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
+                {
+                    foreach(var suffix in new[] {"Visible","InputReady","AppReady"}) Bool(Transition(state,inactive),suffix,false);
+                    Transition(state,inactive).AddCondition(AnimatorConditionMode.IfNot,0,"IsLocal");Transition(state,inactive).AddCondition(AnimatorConditionMode.Less,.5f,ToyControlContract.ReceivePrefix+"Pointer");Transition(state,inactive).AddCondition(AnimatorConditionMode.Equals,hand=="L" ? 1 : 2,ToyControlContract.Prefix+"HoldingHand");
+                    // A fist at a handle belongs to placement immediately, even
+                    // before its prepare state has updated HoldingHand.
+                    foreach(var edge in new[] {"Left","Right"}) {var grab=Transition(state,inactive);grab.AddCondition(AnimatorConditionMode.Equals,1,gesture);Bool(grab,"Grab"+hand+edge,true);}
+                }
+                foreach(var pose in new[] {1,7})
+                {
+                    var press=Transition(ready,down);press.AddCondition(AnimatorConditionMode.Equals,pose,gesture);
+                    if(pose==1) foreach(var edge in new[] {"Left","Right"}) Bool(press,"Grab"+hand+edge,false);
+                }
+                // Both click poses are one held press. Changing between them
+                // must never manufacture the second shock-confirmation click.
+                var release=Transition(down,ready);release.AddCondition(AnimatorConditionMode.NotEqual,1,gesture);release.AddCondition(AnimatorConditionMode.NotEqual,7,gesture);
             }
             foreach(var hand in new[] {"L","R"})
             {

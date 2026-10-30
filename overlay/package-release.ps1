@@ -1,7 +1,8 @@
 param(
-    [string]$Version = '0.7.11',
+    [string]$Version = '0.8.0',
     [string]$OutputDirectory = '',
-    [string[]]$PublishArguments = @()
+    [string[]]$PublishArguments = @(),
+    [switch]$NoZip
 )
 
 $ErrorActionPreference = 'Stop'
@@ -13,6 +14,7 @@ $releaseZip = "$releasePayload.zip"
 if ((Test-Path -LiteralPath $releasePayload) -or (Test-Path -LiteralPath $releaseZip)) { throw 'This release already exists. Use a new version/output folder; previous releases are preserved.' }
 New-Item -ItemType Directory -Path $releaseOutput -Force | Out-Null
 & (Join-Path $PSScriptRoot 'prepare-buttplug.ps1')
+& (Join-Path $PSScriptRoot 'prepare-steamvr.ps1')
 $releaseBridge = Join-Path $releaseRepo 'bridge'
 Push-Location $releaseBridge
 try {
@@ -54,6 +56,7 @@ foreach ($releaseNotice in @('LICENSE.TXT', 'THIRD-PARTY-NOTICES.TXT')) {
 Copy-Item -LiteralPath (Join-Path $releaseNuget "microsoft.windowsdesktop.app.runtime.win-x64/$releaseRuntime/LICENSE") -Destination (Join-Path $releaseLicenses 'DotNet-Desktop-LICENSE.txt')
 Copy-Item -LiteralPath (Join-Path $releaseRepo 'work/ShaderPanelTest/THIRD-PARTY.txt') -Destination (Join-Path $releaseLicenses 'Rendering-THIRD-PARTY.txt')
 Copy-Item -LiteralPath (Join-Path $releaseRepo 'work/ShaderPanelTest/licenses') -Destination (Join-Path $releaseLicenses 'Rendering') -Recurse
+Copy-Item -LiteralPath (Join-Path $releaseRepo 'overlay/SteamVr/vendor/LICENSE-OpenVR.txt') -Destination (Join-Path $releaseLicenses 'LICENSE-OpenVR.txt') -Force
 Copy-Item -LiteralPath (Join-Path $releaseBridge 'package-lock.json') -Destination (Join-Path $releasePayload 'bridge/package-lock.json')
 # SignalR's npm package references an upstream license that must accompany it.
 $releaseSignalLicense = Join-Path $releaseTools 'SignalR-10.0.11-LICENSE.txt'
@@ -74,6 +77,10 @@ Extract the WHOLE ZIP into a new folder and run ShockWave.exe.
 Node.js $releaseNodeVersion, .NET $releaseRuntime and Bluetooth engine 5.0.4 are included.
 Existing settings and encrypted credentials in LOCALAPPDATA/SzebsToys are reused.
 
+When moving from 0.7.x to 0.8.0, download and extract the full package manually
+once. Older updaters do not recognize the new SteamVR files. Version 0.8.0
+includes the updated validation for future SteamVR packages.
+
 Update is below Settings. It checks Szeb95/ShockWave's published stable releases.
 Update downloads and verifies a complete package, closes normally and restarts.
 Automatic update is off by default; when enabled it downloads updates and applies
@@ -86,8 +93,37 @@ permission. Third-party licenses remain separate.
 
 UnityEditor contains optional tool sources. Installation, avatar Update and upload
 are explicit user actions; updating this app never changes an existing Unity project.
-Read REMOTE.md, TOY-CONTROL.md, SPS.md and PISHOCK.md for setup and current limits.
+Read STEAMVR.md, REMOTE.md, TOY-CONTROL.md, SPS.md and PISHOCK.md for setup and current limits.
+
+Toy control and Shocker control recreate the classic desktop layout without HLSL.
+Touch, Toys/Shockers page-switch buttons and duplicate page headings are removed.
+The top toolbar is removed. Bottom left on both pages: Open in VR, Recenter, Stop.
+Record follows Stop on toys. The old Clear curve and Stop all buttons are removed.
+Play loop is removed.
+Use the app sidebar to choose Toy control or Shocker control.
+SteamVR keeps the approved wrist / floating panel design.
+The wrist starts closed. Within about 18 cm, its fixed Move icon appears.
+Freshly hold grip near/above the icon, then pull upward to unfold the watch.
+A separate bar follows the pull, with the same design as the panel handles.
+When expanded, the bar/icon only appear near the other controller (18/24 cm).
+Grip near/above the top bar and pull back to the anchor to close. Active waves and
+submitted shocks keep running. Pending confirmation and unfinished input cancel.
+Settings -> SteamVR panel -> Open wrist menu opens it without the gesture.
+Adjust wrist position restores pointer-held Move; release saves the wrist fit.
+Start SteamVR, then use the bottom-left headset icon on either control page.
+Settings -> SteamVR panel saves hand, Wrist/Panel mode and optional automatic
+opening when ShockWave starts. Automatic opening waits for SteamVR.
+Close VR, Recall and Reconnect VRC are in Settings. No avatar setup is needed.
+Settings -> SteamVR panel -> Transparency fades the whole overlay; Save settings
+keeps it for next launch. Frames and gaps are already fully transparent.
+VR Shock uses two released clicks within three seconds: arm, then confirm.
+Desktop uses one rectangular Shock button: press -> release -> press to confirm.
+Existing Test mode, owner limits and provider no-retry rules still apply.
 "@ | Set-Content -LiteralPath (Join-Path $releasePayload 'README.txt') -Encoding utf8
+if($NoZip) {
+    $releaseGuide=Get-Content -LiteralPath (Join-Path $releasePayload 'README.txt') -Raw
+    $releaseGuide.Replace('Extract the WHOLE ZIP into a new folder and run ShockWave.exe.','Run ShockWave.exe from this complete folder. Keep its files together.') | Set-Content -LiteralPath (Join-Path $releasePayload 'README.txt') -Encoding utf8
+}
 
 $releaseFiles = @(Get-ChildItem -LiteralPath $releasePayload -File -Recurse | Sort-Object FullName)
 foreach ($releaseFile in $releaseFiles) {
@@ -99,6 +135,10 @@ $releaseManifestFiles = @($releaseFiles | ForEach-Object {
 [ordered]@{ format=1; version=$Version; platform='win-x64'; files=$releaseManifestFiles } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $releasePayload 'update-manifest.json') -Encoding utf8
 & (Join-Path $releaseRepo 'tests/local-toys/CheckPublishedWorker.ps1') -Executable (Join-Path $releasePayload 'ShockWave.exe')
 & (Join-Path $releaseRepo 'tests/remote/CheckPublishedRemoteWorker.ps1') -PackageDirectory $releasePayload
+if($NoZip) {
+    [ordered]@{version=$Version;app=(Join-Path $releasePayload 'ShockWave.exe');files=$releaseFiles.Count;zipCreated=$false;physicalVerification=$false;published=$false} | ConvertTo-Json
+    return
+}
 [IO.Compression.ZipFile]::CreateFromDirectory($releasePayload, $releaseZip, [IO.Compression.CompressionLevel]::Optimal, $false)
 $releaseZipHash = (Get-FileHash -LiteralPath $releaseZip -Algorithm SHA256).Hash.ToLowerInvariant()
 "$releaseZipHash  $([IO.Path]::GetFileName($releaseZip))" | Set-Content -LiteralPath "$releaseZip.sha256.txt" -Encoding ascii

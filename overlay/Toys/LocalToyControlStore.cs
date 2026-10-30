@@ -9,6 +9,7 @@ internal sealed class LocalToyControlStore(string? path = null)
 {
     private sealed record Document(int Version, List<ToyControlPreference> Channels);
     private readonly Dictionary<(string, string), ToyControlPreference> preferences = [];
+    private readonly HashSet<string> transient = new(StringComparer.Ordinal);
     private bool writable = true;
     public string? Warning { get; private set; }
 
@@ -34,18 +35,19 @@ internal sealed class LocalToyControlStore(string? path = null)
     }
 
     public ToyControlPreference Get(string device, string channel) => preferences.GetValueOrDefault((device, channel)) ?? new(device, channel);
-    public void Save(ToyControlPreference preference)
+    public void Save(ToyControlPreference preference, bool persistent = true)
     {
         Validate(preference);
         if (!writable) throw new InvalidOperationException(Warning);
         var next = new Dictionary<(string, string), ToyControlPreference>(preferences) { [(preference.DeviceKey, preference.ChannelId)] = preference };
-        if (path is not null)
+        if (!persistent) transient.Add(preference.DeviceKey);
+        if (path is not null && persistent)
         {
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var temporary = path + ".tmp";
             try
             {
-                File.WriteAllText(temporary, JsonSerializer.Serialize(new Document(1, next.Values.ToList())));
+                File.WriteAllText(temporary, JsonSerializer.Serialize(new Document(1, next.Values.Where(value => !transient.Contains(value.DeviceKey)).ToList())));
                 File.Move(temporary, path, true);
             }
             finally { if (File.Exists(temporary)) File.Delete(temporary); }

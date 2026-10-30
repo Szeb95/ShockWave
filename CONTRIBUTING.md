@@ -14,6 +14,8 @@ Remove API keys, invitation codes, hardware identifiers and personal information
 
 ## Source layout
 
+See [the code map](docs/CODE-MAP.md) for settings, bridge modules and focused verification commands.
+
 - `overlay/`: native .NET 8 Windows Forms app and packaging sources.
 - `bridge/`: Node.js ESM OSC, OpenShock, PiShock and direct connection workers.
 - `tests/`: isolated native and packaging checks.

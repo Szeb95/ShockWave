@@ -23,6 +23,7 @@ work/installer-checks/
 overlay/native/buttplug/*.exe
 work/buttplug-backup/
 work/pishock-backup/
+work/panel-integration-backup/
 work/pishock-checks/
 work/buttplug-reference/
 work/intiface-engine-*.zip

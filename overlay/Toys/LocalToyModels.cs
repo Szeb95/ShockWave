@@ -45,6 +45,7 @@ internal sealed record LocalToyDescriptor(string DeviceKey, string Adapter, stri
     public bool IsRemembered { get; init; }
     public bool AutoConnect { get; init; }
     public bool AutoConnectPaused { get; init; }
+    public bool PersistentIdentity { get; init; } = true;
 }
 
 internal sealed record ToyAdapterSnapshot(ToyAdapterAvailability Availability, bool IsScanning,

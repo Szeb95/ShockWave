@@ -1,5 +1,7 @@
 # Local toy checks
 
+`--intiface-checks` runs nine new fake-phone/software checks: endpoint validation/separate settings/corruption preservation, compressed and split DNS-SD records/malformed replies/goodbye, real loopback fragmented WebSockets and zero-watchdog monitoring, nickname/index/session identity, duplicate-name revocation, automatic connection recovery with Test mode/caps/Stop/no replay, ambiguous-response closure, transient preference exclusion and the actual Bluetooth settings/discovery/save controls. `FakeIntifaceServer` exposes no physical device. Phone Wi-Fi, BLE output, screen locking and physical stop time remain unverified. The full-shell toy checks also render the phone settings at both supported window sizes. The unchanged DPAPI store fixture requires a usable Windows user profile; the restricted execution account may fail that full-suite check.
+
 The exit regression starts a hidden fake worker with a five-second call timeout, stalls its output call and closes the actual page. It verifies synchronous disarming before transport release, completion under 2.5 seconds, worker termination, idempotent cleanup and rejected replay. Native zero/quit is attempted by the existing worker path; this fixture does not establish physical stop timing.
 
 Run on Windows x64 with .NET 8:

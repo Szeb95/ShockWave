@@ -124,12 +124,28 @@ internal sealed class ToyFunctionRow : RoundedPanel
             state.Text = connected ? "Connected" : "Offline";
             return;
         }
-        var current = controller.State(DeviceKey, ChannelId);
+        ToyChannelState current;
+        try { current = controller.State(DeviceKey, ChannelId); }
+        catch (InvalidOperationException)
+        {
+            // Inventory may change after the page took its display snapshot (Forget,
+            // a phone disconnect or a nickname change). A stale row cannot stay usable.
+            updating = true;
+            try
+            {
+                input.Value = 0; inputValue.Text = "0%";
+                input.Enabled = sensitivity.Enabled = maximum.Enabled = readBattery.Enabled = stopToy.Enabled = forget.Enabled = false;
+                state.Text = "Offline"; state.ForeColor = Muted; title.ForeColor = TextColor;
+            }
+            finally { updating = false; }
+            return;
+        }
         updating = true;
         try
         {
             input.Value = current.RequestedPercent; inputValue.Text = current.RequestedPercent + "%";
             input.Enabled = connected && current.Armed;
+            sensitivity.Enabled = maximum.Enabled = true;
             sensitivity.Value = current.Preference.Sensitivity; sensitivityValue.Text = current.Preference.Sensitivity + "%";
             maximum.Value = current.Preference.Maximum; maxValue.Text = current.Preference.Maximum + "%";
             state.Text = connected ? $"{(controller.TestMode ? "Preview" : "Sent")} {current.SentPercent:0.#}%" :

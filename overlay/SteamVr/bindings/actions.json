@@ -1,0 +1,102 @@
+{
+  "action_sets": [
+    {
+      "usage": "leftright",
+      "name": "/actions/panel"
+    }
+  ],
+  "default_bindings": [
+    {
+      "controller_type": "oculus_touch",
+      "binding_url": "oculus_touch_default.json"
+    },
+    {
+      "controller_type": "knuckles",
+      "binding_url": "knuckles_default.json"
+    },
+    {
+      "controller_type": "vive_controller",
+      "binding_url": "vive_controller_default.json"
+    },
+    {
+      "controller_type": "vive_cosmos_controller",
+      "binding_url": "vive_cosmos_controller_default.json"
+    },
+    {
+      "controller_type": "holographic_controller",
+      "binding_url": "holographic_controller_default.json"
+    },
+    {
+      "controller_type": "hpmotioncontroller",
+      "binding_url": "hpmotioncontroller_default.json"
+    }
+  ],
+  "localization": [
+    {
+      "/actions/panel": "ShockWave Panel",
+      "/actions/panel/in/pose_right": "right pointer",
+      "/actions/panel/in/click_left": "left click / draw",
+      "/actions/panel/in/pose_left": "left pointer",
+      "/actions/panel/in/click_right": "right click / draw",
+      "/actions/panel/out/haptic_right": "right click feedback",
+      "/actions/panel/out/haptic_left": "left click feedback",
+      "language_tag": "en_us",
+      "/actions/panel/in/grip_left": "left physical grip / grab",
+      "/actions/panel/in/hand_left": "left grip position",
+      "/actions/panel/in/grip_right": "right physical grip / grab",
+      "/actions/panel/in/hand_right": "right grip position"
+    }
+  ],
+  "actions": [
+    {
+      "type": "pose",
+      "name": "/actions/panel/in/pose_left",
+      "requirement": "suggested"
+    },
+    {
+      "type": "boolean",
+      "name": "/actions/panel/in/click_left",
+      "requirement": "suggested"
+    },
+    {
+      "type": "vibration",
+      "name": "/actions/panel/out/haptic_left",
+      "requirement": "optional"
+    },
+    {
+      "type": "pose",
+      "name": "/actions/panel/in/pose_right",
+      "requirement": "suggested"
+    },
+    {
+      "type": "boolean",
+      "name": "/actions/panel/in/click_right",
+      "requirement": "suggested"
+    },
+    {
+      "type": "vibration",
+      "name": "/actions/panel/out/haptic_right",
+      "requirement": "optional"
+    },
+    {
+      "type": "boolean",
+      "name": "/actions/panel/in/grip_left",
+      "requirement": "optional"
+    },
+    {
+      "type": "pose",
+      "name": "/actions/panel/in/hand_left",
+      "requirement": "optional"
+    },
+    {
+      "type": "boolean",
+      "name": "/actions/panel/in/grip_right",
+      "requirement": "optional"
+    },
+    {
+      "type": "pose",
+      "name": "/actions/panel/in/hand_right",
+      "requirement": "optional"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ param([string]$OutputDirectory = '')
 
 $ErrorActionPreference = 'Stop'
 & (Join-Path $PSScriptRoot 'prepare-buttplug.ps1')
+& (Join-Path $PSScriptRoot 'prepare-steamvr.ps1')
 
 $project = Join-Path $PSScriptRoot 'ShockWave.Overlay.csproj'
 $output = if ($OutputDirectory) { [System.IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $PSScriptRoot 'dist\shockwave' }

@@ -12,7 +12,7 @@ const positiveId = value => Number.isInteger(value) && value > 0 && value <= 214
 const modes = { Shock: 's', Vibrate: 'v', Sound: 'b' };
 const safeName = value => typeof value === 'string' ? value.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 64).trim() : '';
 const failure = (message, statusCode = 0) => Object.assign(new Error(message), { statusCode });
-const defaultUrls = { auth: 'https://auth.pishock.com', api: 'https://ps.pishock.com', broker: 'wss://broker.pishock.com/v2' };
+const defaultUrls = { account: 'https://api.pishock.com', api: 'https://ps.pishock.com', broker: 'wss://broker.pishock.com/v2' };
 
 export function readPiShockDevices(owned, shared) {
   if (!Array.isArray(owned) || !shared || typeof shared !== 'object' || Array.isArray(shared)) throw failure('Unexpected PiShock device list');
@@ -78,7 +78,7 @@ export async function startPiShockBridge(input, apiKey, options, common) {
   const Socket = options.WebSocket ?? globalThis.WebSocket;
   const urls = { ...defaultUrls, ...options.piShockUrls }; // dependency injection for loopback fixtures only
   const receiver = dgram.createSocket('udp4'), sender = dgram.createSocket('udp4');
-  let stopped = false, socket, authenticated = false, userId = null, devices = new Map();
+  let stopped = false, socket, authenticated = false, userId = null, accountUsername = null, devices = new Map();
   let inventoryAt = 0, readInFlight = false, readError = null, socketError = null, retryAt = 0, reconnectAt = 0;
   let pingDeadline = 0, nextPingAt = 0, lastStatus = '', unknownMessageReported = false;
   const runtimes = new Map(), pending = new Map(), feedbackTimers = new Set();
@@ -140,14 +140,16 @@ export async function startPiShockBridge(input, apiKey, options, common) {
     if (!stopped) log('@activity ' + JSON.stringify({ kind: 'shocker-activity', key, id, phase, remainingMs }));
   }
 
-  async function readJson(base, endpoint, params) {
+  async function readJson(base, endpoint, params = [], request = {}) {
     const url = new URL(endpoint, base);
     for (const [key, value] of params) url.searchParams.append(key, String(value));
+    const stage = request.stage ?? 'API request';
     let response;
-    try { response = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json', 'User-Agent': 'ShockWave/0.3' } }); }
-    catch { throw failure('PiShock connection failed or timed out'); }
+    try { response = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(8000), headers: { 'Accept': 'application/json', 'User-Agent': 'ShockWave-Bridge/PiShock', ...request.headers } }); }
+    catch { throw failure(`PiShock ${stage} failed or timed out`); }
     if (!response.ok) {
-      const error = failure(`PiShock API request failed (HTTP ${response.status})`, response.status);
+      const reason = stage === 'account lookup' && response.status === 401 ? ' Check that you pasted the API key value from your PiShock account.' : '';
+      const error = failure(`PiShock ${stage} failed (HTTP ${response.status}).${reason}`, response.status);
       if (response.status === 429) {
         const value = response.headers.get('retry-after'), seconds = value ? Number(value) : NaN;
         error.retryMs = Number.isFinite(seconds) ? Math.max(1000, seconds * 1000) : Math.max(1000, Date.parse(value) - now()) || 60000;
@@ -158,7 +160,7 @@ export async function startPiShockBridge(input, apiKey, options, common) {
       const body = await response.text();
       if (body.length > 2097152) throw new Error();
       return JSON.parse(body);
-    } catch { throw failure('Unexpected PiShock API response'); }
+    } catch { throw failure(`Unexpected PiShock ${stage} response`); }
   }
 
   async function refreshDevices() {
@@ -166,19 +168,27 @@ export async function startPiShockBridge(input, apiKey, options, common) {
     if (!apiKey || !config.piShockUsername?.trim()) { publishStatus(); return; }
     readInFlight = true;
     try {
-      const auth = await readJson(urls.auth, '/Auth/GetUserIfAPIKeyValid', [['apikey', apiKey], ['username', config.piShockUsername]]);
-      if (!positiveId(auth?.UserID)) throw failure('PiShock username or API key was rejected', 401);
-      const credentials = [['UserId', auth.UserID], ['Token', apiKey], ['api', true]];
+      // The old auth.pishock.com/Auth/GetUserIfAPIKeyValid route is removed.
+      // Current official OpenAPI: GET api.pishock.com/Account, API key in the
+      // X-PiShock-Api-Key header; response fields are UserId and Username.
+      const account = await readJson(urls.account, '/Account', [], { stage: 'account lookup', headers: { 'X-PiShock-Api-Key': apiKey } });
+      const accountId = account?.UserId ?? account?.userId;
+      const canonicalName = account?.Username ?? account?.username;
+      if ((account?.UserId !== undefined && account?.userId !== undefined && account.UserId !== account.userId) ||
+          (account?.Username !== undefined && account?.username !== undefined && account.Username !== account.username) ||
+          !positiveId(accountId) || typeof canonicalName !== 'string' || !canonicalName.trim() ||
+          canonicalName.length > 256 || /[\x00-\x1f\x7f]/.test(canonicalName)) throw failure('Unexpected PiShock account lookup response');
+      const credentials = [['UserId', accountId], ['Token', apiKey], ['api', true]];
       const [owned, shares] = await Promise.all([
-        readJson(urls.api, '/PiShock/GetUserDevices', credentials),
-        readJson(urls.api, '/PiShock/GetShareCodesByOwner', credentials),
+        readJson(urls.api, '/PiShock/GetUserDevices', credentials, { stage: 'owned-device lookup' }),
+        readJson(urls.api, '/PiShock/GetShareCodesByOwner', credentials, { stage: 'shared-device lookup' }),
       ]);
       if (!shares || typeof shares !== 'object' || Array.isArray(shares) || Object.values(shares).some(ids => !Array.isArray(ids) || ids.some(id => !positiveId(id)))) throw failure('Unexpected PiShock share list');
       const ids = [...new Set(Object.values(shares).flat())];
       if (ids.length > 2000) throw failure('Too many PiShock shares');
       const shared = Object.create(null);
       for (let index = 0; index < ids.length; index += 50) {
-        const chunk = await readJson(urls.api, '/PiShock/GetShockersByShareIds', [...credentials, ...ids.slice(index, index + 50).map(id => ['shareIds', id])]);
+        const chunk = await readJson(urls.api, '/PiShock/GetShockersByShareIds', [...credentials, ...ids.slice(index, index + 50).map(id => ['shareIds', id])], { stage: 'share-details lookup' });
         if (!chunk || typeof chunk !== 'object' || Array.isArray(chunk)) throw failure('Unexpected PiShock share details');
         for (const [owner, values] of Object.entries(chunk)) {
           if (!Array.isArray(values)) throw failure('Unexpected PiShock share details');
@@ -188,7 +198,9 @@ export async function startPiShockBridge(input, apiKey, options, common) {
       const next = readPiShockDevices(owned, shared);
       if (stopped) return;
       if (readError || !inventoryAt || now() - inventoryAt >= 90000 || JSON.stringify([...devices.values()]) !== JSON.stringify([...next.values()])) resetCaptures();
-      devices = next; userId = auth.UserID; inventoryAt = now(); readError = null; retryAt = 0;
+      if (accountUsername !== null && accountUsername !== canonicalName && socket && socket.readyState !== Socket.CLOSED)
+        disconnect(socket, 'PiShock account name changed; reconnecting with fresh account information');
+      devices = next; userId = accountId; accountUsername = canonicalName; inventoryAt = now(); readError = null; retryAt = 0;
       for (const runtime of runtimes.values()) runtime.error = null;
       // Explicit projection: no share code, API key, username, or raw server response in IPC/logs.
       log('@devices ' + JSON.stringify({ kind: 'pishock-devices', devices: [...devices.values()].map(d => ({ uuid: d.uuid, name: d.name, hubName: d.hubName, shared: d.shared })) }));
@@ -229,7 +241,7 @@ export async function startPiShockBridge(input, apiKey, options, common) {
   function connect() {
     if (stopped || !Socket || readError || !userId || !apiKey || (socket && socket.readyState !== Socket.CLOSED)) return;
     const url = new URL(urls.broker);
-    url.searchParams.set('Username', config.piShockUsername); url.searchParams.set('ApiKey', apiKey);
+    url.searchParams.set('Username', accountUsername); url.searchParams.set('ApiKey', apiKey);
     const current = new Socket(url);
     socket = current; authenticated = false; socketError = null; unknownMessageReported = false;
     pingDeadline = now() + 10000;

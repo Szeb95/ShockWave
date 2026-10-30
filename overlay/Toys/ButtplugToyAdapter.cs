@@ -28,11 +28,13 @@ internal sealed class ButtplugToyAdapter : ILocalToyAdapter, ILocalToyOutput, IL
     private Task inventoryLoop = Task.CompletedTask;
     private Task? cleanup;
     private readonly TimeSpan scanDuration;
+    private readonly bool external;
     public Func<string, bool> AllowConnection { private get; set; } = _ => true;
     public event Action? Changed;
     public event Action<string>? OutputFailed;
-    public ButtplugToyAdapter(Func<LocalToyKeys> createKeys, Func<IButtplugSession>? createSession = null, TimeSpan? scanDuration = null)
-    { this.createKeys = createKeys; this.createSession = createSession ?? (() => new ButtplugEngineSession()); this.scanDuration = scanDuration ?? TimeSpan.FromSeconds(15); }
+    public ButtplugToyAdapter(Func<LocalToyKeys> createKeys, Func<IButtplugSession>? createSession = null, TimeSpan? scanDuration = null, bool external = false)
+    { this.external = external; this.createKeys = createKeys; this.createSession = createSession ?? (() => new ButtplugEngineSession()); this.scanDuration = scanDuration ?? TimeSpan.FromSeconds(15);
+        if (external) message = "Connecting to Intiface on your phone…"; }
     public ToyAdapterSnapshot Snapshot
     {
         get { lock (sync) return new(availability, scanning, message, Array.AsReadOnly(entries.Values.Select(value => value.Descriptor)
@@ -59,9 +61,9 @@ internal sealed class ButtplugToyAdapter : ILocalToyAdapter, ILocalToyOutput, IL
             OnMessage("DeviceList", devices);
             inventoryLoop = Task.Run(InventoryLoopAsync);
         }
-        catch (Exception)
+        catch (Exception error)
         {
-            lock (sync) { availability = ToyAdapterAvailability.Error; lastError = "Bundled Bluetooth engine unavailable. Reset Bluetooth or choose Lovense Bluetooth (legacy)."; }
+            lock (sync) { availability = ToyAdapterAvailability.Error; lastError = external ? error is InvalidOperationException ? error.Message : "Cannot reach Intiface on your phone. Check its server and home network." : "Bundled Bluetooth engine unavailable. Reset Bluetooth or choose Lovense Bluetooth (legacy)."; }
             Publish(); throw;
         }
     }
@@ -93,7 +95,7 @@ internal sealed class ButtplugToyAdapter : ILocalToyAdapter, ILocalToyOutput, IL
         {
             if (closed) return;
             scanning = false; announced.Clear(); availability = ToyAdapterAvailability.Error;
-            lastError = message = "Bluetooth engine connection lost · output disarmed. Reset Bluetooth to recover.";
+            lastError = message = external ? "Phone connection lost · output disarmed. Reconnecting automatically…" : "Bluetooth engine connection lost · output disarmed. Reset Bluetooth to recover.";
             affected = entries.Keys.ToArray();
             foreach (var key in affected) entries[key] = entries[key] with { Descriptor = entries[key].Descriptor with
                 { ConnectionState = ToyConnectionState.Unavailable, BatteryPercent = null } };
@@ -119,7 +121,7 @@ internal sealed class ButtplugToyAdapter : ILocalToyAdapter, ILocalToyOutput, IL
                     // target MAC. Adapter MACs may precede it in a WinRT ID.
                     var addresses = Regex.Matches(identity, @"(?i)(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}");
                     var normalized = addresses.Count > 0 ? Regex.Replace(addresses[^1].Value, "[^0-9A-Fa-f]", "") : null;
-                    var key = normalized is not null ? keys!.ForDevice("lovense-ble", "address:" + normalized) : keys!.ForDevice("buttplug-ble", identity);
+                    var key = external ? keys!.ForDevice("intiface-phone", identity) : normalized is not null ? keys!.ForDevice("lovense-ble", "address:" + normalized) : keys!.ForDevice("buttplug-ble", identity);
                     if (!AllowConnection(key))
                     {
                         await session.RequestAsync("StopDeviceCmd", new { DeviceIndex = index }, lifetime.Token);
@@ -128,14 +130,17 @@ internal sealed class ButtplugToyAdapter : ILocalToyAdapter, ILocalToyOutput, IL
                     }
                     var (features, capabilities, battery) = ParseFeatures(device);
                     var label = name[8..];
+                    if (external && device.TryGetProperty("DeviceDisplayName", out var display) && display.ValueKind == JsonValueKind.String &&
+                        display.GetString()?.Trim() is { Length: > 0 and <= 128 } nickname && !nickname.Any(char.IsControl)) label = nickname;
                     lock (sync)
                     {
                         if (closed || !announced.ContainsKey(index) || disconnected.Contains(key)) continue;
                         if (entries.TryGetValue(key, out var existing) && existing.Index == index && existing.Descriptor.ConnectionState == ToyConnectionState.Connected) continue;
-                        var descriptor = new LocalToyDescriptor(key, "buttplug-ble", label, label,
-                            ToyConnectionState.Connected, capabilities, capabilities.Count > 0, null, DateTimeOffset.UtcNow, 10, false);
+                        var descriptor = new LocalToyDescriptor(key, external ? "intiface-phone" : "buttplug-ble", label, name[8..],
+                            ToyConnectionState.Connected, capabilities, capabilities.Count > 0, null, DateTimeOffset.UtcNow, 10, false)
+                            { PersistentIdentity = session.PersistentIdentity(index) };
                         entries[key] = new(index, descriptor, features, battery);
-                        message = "Bundled Bluetooth · connected toys stay usable during discovery.";
+                        message = external ? "Intiface phone · connected. Unique toy nicknames in Intiface keep settings and mappings after reconnect." : "Bundled Bluetooth · connected toys stay usable during discovery.";
                     }
                     Publish();
                 }
@@ -185,7 +190,7 @@ internal sealed class ButtplugToyAdapter : ILocalToyAdapter, ILocalToyOutput, IL
         lock (sync) if (scanning) return;
         lock (sync)
         {
-            scanning = true; message = "Scanning · connected toys remain controllable.";
+            scanning = true; message = external ? "Intiface phone · finding toys. Connected toys remain controllable." : "Scanning · connected toys remain controllable.";
             scanLifetime?.Cancel(); scanLifetime = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
         }
         Publish();

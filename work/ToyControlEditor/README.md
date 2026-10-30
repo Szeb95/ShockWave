@@ -52,9 +52,9 @@ Existing saved Size can override the new default. Size maps 0–100% to 0.4–1.
 
 ## Touch and either-hand pointer
 
-**Touch / Pointer**, beside Play loop, switches modes in the app or avatar. Touch is the startup default. Aim like a finger pistol with either hand, then curl the index into **Thumbs Up** to click or hold to draw. Finger curl does not steer the calibrated wrist direction. The starting hand owns a drag; a held second hand cannot take it over. Hover sends no hardware command. Changing modes, losing the target or losing the panel link cancels an unfinished capture and requires a fresh release/press.
+**Touch / Pointer**, beside Play loop, switches modes in the app or avatar. Touch is the startup default. Aim with **Finger Point** or a **finger gun** using either hand. Close into **Fist** or **Thumbs Up** to click; hold to draw or drag. Open the hand back to a non-click pose to release. Switching directly between Fist and Thumbs Up stays one held press. A Fist at either handle grabs the panel and suppresses that hand's click; the free hand can still draw. Finger curl does not steer the calibrated wrist direction. The starting hand owns a drag; a held second hand cannot take it over. Hover sends no hardware command. Changing modes, losing the target or losing the panel link cancels an unfinished capture and requires a fresh release/press. The added Fist click needs an explicit avatar Update/upload with the revised tools; the Windows app and OSC contract remain compatible.
 
-A small guide at the bottom of both avatar pages reads: **Fist = grab handle | Finger gun = point | Curl index (thumbs up) = click**.
+A small guide at the bottom of both avatar pages reads: **Fist at handle = grab | Point / finger gun = aim | Fist / thumbs up = click**.
 
 The v7 pointer replaces scene raycasts with two rigid local Contact points per hand. ShockWave reconstructs the panel-relative pose and intersects the ray with the visible panel plane. Both visuals use that same hit: misses, transparent gaps, incoherent samples, excessive distance and grazing angles hide the beam and dot. The dot stays 0.2 mm in front of the board at normal size. Cursor feedback bypasses the larger graph refresh. This needs both the new app and an updated/uploaded avatar; the old native pointer does not provide the new pose fields.
 

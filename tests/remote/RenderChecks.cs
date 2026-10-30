@@ -14,8 +14,9 @@ internal static partial class Program
     {
         using var receiver=new Fixture();using var sender=new Fixture();using var local=new LocalToysPage();
         sender.Session.Receive("inventory",Element(receiver.Session.PublishInventory()));
-        var slow=new SlowPanelRenderer();
-        using var page=new ToyControlPage(local,(_,_)=>{},_=>slow);
+        var frames=0;
+        using var page=new ToyControlPage(local,(_,_)=>{});
+        page.RenderDesktopFrame=snapshot=>{Thread.Sleep(180);Interlocked.Increment(ref frames);return DesktopPanelView.Render(snapshot);};
         page.Session.Remote=sender.Session.Toys;
         using var preview=new Form {Width=1050,Height=800,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
         preview.Controls.Add(page);preview.Show();Application.DoEvents();
@@ -36,8 +37,8 @@ internal static partial class Program
         while(Environment.TickCount64<until){Application.DoEvents();Thread.Sleep(5);}
         timer.Stop();preview.Hide();
         var final=receiver.Controller.State("fixture","v1").RequestedPercent;
-        File.WriteAllText(Path.Combine(artifacts,"render-performance.json"),JsonSerializer.Serialize(new {maximumGap,maximumWork,ticks,expired,frames=slow.Frames,expected,final,PhysicalOutput=false,InjectedGraphicsDelayMs=180,InputRemainingMs=150}));
-        Check(!expired && ticks>10 && final==expected,"slow 180 ms panel frames do not expire a 150 ms simulated receiver lease");
+        File.WriteAllText(Path.Combine(artifacts,"render-performance.json"),JsonSerializer.Serialize(new {maximumGap,maximumWork,ticks,expired,frames,expected,final,PhysicalOutput=false,InjectedGraphicsDelayMs=180,InputRemainingMs=150}));
+        Check(!expired && ticks>10 && final==expected && frames>0,"slow 180 ms raster panel frames do not expire a 150 ms simulated receiver lease");
     }
     private static void RenderSnapshots()
     {
@@ -97,86 +98,84 @@ internal static partial class Program
     {
         using var receiver=new Fixture(2);using var sender=new Fixture();using var local=new LocalToysPage();
         sender.Session.Receive("inventory",Element(receiver.Session.PublishInventory()));
-        var backend=new ControlledPanelRenderer();
-        using var page=new ToyControlPage(local,(_,_)=>{},_=>backend);page.Session.Remote=sender.Session.Toys;
-        using var preview=new Form {Width=850,Height=650,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
+        using var page=new ToyControlPage(local,(_,_)=>{});page.Session.Remote=sender.Session.Toys;
+        using var preview=new Form {Width=1050,Height=800,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
         preview.Controls.Add(page);preview.Show();Application.DoEvents();
-        var flags=BindingFlags.NonPublic|BindingFlags.Instance;
-        var surface=(Control)typeof(ToyControlPage).GetField("surface",flags)!.GetValue(page)!;
+        var flags=BindingFlags.NonPublic|BindingFlags.Instance;var surface=page.DesktopSurface;
+        void Paint() {using var image=new Bitmap(Math.Max(1,surface.Width),Math.Max(1,surface.Height));surface.DrawToBitmap(image,surface.ClientRectangle);}
+        void Display()
+        {
+            var until=Environment.TickCount64+3000;
+            do {page.Tick();Application.DoEvents();Paint();Thread.Sleep(5);if(Environment.TickCount64>until) throw new Exception("Desktop replica did not display current state");} while(!page.DesktopReady);
+        }
         void Mouse(string method,float x,float y)
         {
-            var point=new Point((int)Math.Round(x*surface.Width/1240),(int)Math.Round((y-100)*surface.Height/608));
-            typeof(Control).GetMethod(method,flags)!.Invoke(surface,[new MouseEventArgs(MouseButtons.Left,1,point.X,point.Y,0)]);
+            var p=surface.Pixel(new(x,y));typeof(Control).GetMethod(method,flags)!.Invoke(surface,[new MouseEventArgs(MouseButtons.Left,1,p.X,p.Y,0)]);
         }
-        long Revision()=>(long)typeof(ToyControlPage).GetMethod("CurrentInputRevision",flags)!.Invoke(page,null)!;
-        page.Session.Tick(ToyOscRouter.Clock);page.Session.Model.Functions.First().Function.Selected=true;
-        page.Session.Draw(new(600,300),false,true);page.Tick();
-        var worker=(PanelRenderWorker)typeof(ToyControlPage).GetField("renderer",flags)!.GetValue(page)!;
-        try
-        {
-            Wait(()=>backend.Entered.IsSet,"desktop fixture did not start its blocked display");
-            Mouse("OnMouseDown",240,205);
-            Check(sender.Session.Toys.Levels().Length==0 && page.Session.Model.SelectedCount==0 && !backend.Release.IsSet,
-                "desktop Stop all releases input immediately before the first frame finishes");
-            backend.Release.Set();Wait(()=>worker.Ready,"desktop fixture did not display its first layout");
-            page.Session.Model.Functions.Skip(1).First().Function.Selected=true;
-            Mouse("OnMouseDown",600,300);Mouse("OnMouseUp",600,300);
-            Check(sender.Session.Toys.Levels().Length==0,"desktop graph cannot control a selection that is not yet displayed");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display the new selection");
-            Mouse("OnMouseDown",600,300);
-            Check(sender.Session.Toys.Levels().Length==1,"desktop graph accepts fresh input once its current selection is displayed");
-            Mouse("OnMouseUp",600,300);Mouse("OnMouseDown",240,205);
-            var submissions=0;
-            page.Session.Shockers.Inventory=()=>[new("fixture-shocker","Fixture","Mock",true,100,15000,false),new("fixture-second","Second","Mock",true,40,500,false)];
-            page.Session.Shockers.Send=(_,_,_,_,_)=>{submissions++;return true;};
-            page.Session.SetPage(true);page.Session.Tick(ToyOscRouter.Clock);
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display its shocker rows");
-            Mouse("OnMouseDown",150,270);Mouse("OnMouseUp",150,270);
-            Check(page.Session.Shockers.Selected.Length==1,"desktop shocker row click toggles once instead of selecting twice");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display the first selected shocker");
-            Mouse("OnMouseDown",150,334);Mouse("OnMouseUp",150,334);
-            Check(page.Session.Shockers.Selected.Length==2 && submissions==0,"desktop selects a second shocker without replacing the first or sending commands");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display both selected shockers");
-            Mouse("OnMouseDown",150,334);Mouse("OnMouseUp",150,334);
-            Check(page.Session.Shockers.Selected.Single().Id=="fixture-shocker","desktop re-click deselects only that shocker");
-            page.Session.Shockers.SetSlider(30,.2f);
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display its shocker values");
-            page.Session.Shockers.SetSlider(30,.8f);
-            Mouse("OnMouseDown",1088,308);Mouse("OnMouseUp",1088,308);
-            Check(!page.Session.Shockers.Armed,"desktop confirmation cannot arm with changed but undisplayed shocker values");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display the changed shocker values");
-            page.Session.Shockers.SetSlider(31,.2f);
-            Mouse("OnMouseDown",1088,308);Mouse("OnMouseUp",1088,308);
-            Check(!page.Session.Shockers.Armed,"desktop confirmation also waits for a changed duration to be displayed");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display the changed duration");
-            Mouse("OnMouseDown",1088,308);Mouse("OnMouseUp",1088,308);
-            Check(page.Session.Shockers.Armed,"desktop confirmation accepts its displayed values with the existing release step");
-            Mouse("OnMouseDown",878,308);Mouse("OnMouseUp",878,308);
-            Check(page.Session.Shockers.Armed && submissions==0,"desktop shock confirmation waits until the armed state has been displayed");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display the armed state");
-            Mouse("OnMouseDown",878,308);Mouse("OnMouseUp",878,308);
-            Check(!page.Session.Shockers.Armed && submissions==1,"fresh displayed desktop confirmation submits exactly one fake command");
-            page.Tick();Wait(()=>worker.AcceptsInput(Revision()),"desktop fixture did not display the reset confirmation");
-            Mouse("OnMouseDown",1088,308);Mouse("OnMouseUp",1088,308);
-            Mouse("OnMouseDown",240,205);
-            Check(!page.Session.Shockers.Armed,"desktop Stop all cancels confirmation even while its armed frame is pending");
-        }
-        finally {backend.Release.Set();page.Shutdown();preview.Hide();}
-        Wait(()=>worker.Completed,"desktop fixture did not release its graphics resources");
+        void Click(float x,float y) {Mouse("OnMouseDown",x,y);Mouse("OnMouseUp",x,y);}
+        page.Session.Tick(ToyOscRouter.Clock);page.Session.Model.Functions.First().Function.Selected=true;page.Session.Draw(new(600,300),false,true);
+        Paint();Click(521,658);
+        Check(sender.Session.Toys.Levels().Length==0 && page.Session.Model.SelectedCount==0,"desktop Stop ends remote input before the first replica frame");
+        Display();var pointerMode=page.Session.PointerMode;Click(720,148);
+        Check(page.Session.PointerMode==pointerMode && !surface.Capture,"removed Touch button is inert on the desktop toy page");
+        Check(!page.Controls.OfType<FlowLayoutPanel>().Any(),"both control pages have no top toolbar");
+        var vrOpens=0;page.OpenVrAction=()=>{vrOpens++;return true;};Click(393,658);
+        Check(vrOpens==1 && !surface.Capture,"bottom-left VR icon opens from Toy control");
+        Click(150,270);Check(page.Session.Model.SelectedCount==1,"desktop replica mouse uses the original function-row position");
+        Display();Click(393,148);Check(!page.Session.Model.RecordArmed,"former upper-left Record position is inert");
+        Click(585,658);Check(page.Session.Model.RecordArmed,"bottom Record icon uses the shared recorder");
+        Display();Click(585,658);Display();Click(550,148);
+        Check(!page.Session.Model.RecordArmed && page.Session.Model.LoopCount==0 && !surface.Capture,"removed Play loop area is inert");
+        Display();page.Session.Model.Functions.Skip(1).First().Function.Selected=true;Click(600,300);
+        Check(sender.Session.Toys.Levels().Length==0,"desktop replica rejects an undisplayed selection");
+        Display();Mouse("OnMouseDown",600,300);Check(sender.Session.Toys.Levels().Length==2,"desktop curve controls displayed selected remote functions");
+        Mouse("OnMouseMove",1200,120);typeof(Control).GetMethod("OnMouseLeave",flags)!.Invoke(surface,[EventArgs.Empty]);
+        Check(page.Session.Model.Touching && page.Session.Model.Level==1,"desktop curve stays captured and clamped outside the old graph");
+        page.Panel.MarkPresented();var native=page.Panel.Layout().Plot;page.Input.Down("vr1",new(native.X+native.Width/2,native.Y+native.Height/2));
+        Check(!page.Input.PointerActive,"native pointer cannot take over a held desktop drawing");
+        Mouse("OnMouseUp",1200,120);Click(521,658);Display();Click(150,270);Display();page.Tick();page.Panel.MarkPresented();
+        native=page.Panel.Layout().Plot;var nativePoint=new PointF(native.X+native.Width/2,native.Y+native.Height/2);page.Input.Down("vr1",nativePoint);
+        Mouse("OnMouseDown",600,300);Check(page.Input.IsDrawing("vr1") && !surface.Capture,"desktop cannot take over a held native drawing");
+        page.Input.Up("vr1",nativePoint);Click(521,658);Display();
+        var oldLayout=ToyControlLayout.Row(0);page.Panel.SetCompact(false);page.SetTransparency(100);Display();
+        Check(ToyControlLayout.Row(0)==oldLayout && page.DesktopReady,"VR placement and full transparency do not change the desktop layout");
+        using(var image=new Bitmap(surface.Width,surface.Height)) {surface.DrawToBitmap(image,surface.ClientRectangle);image.Save(Path.Combine(artifacts,"desktop-replica-toys.png"));Check(image.GetPixel(surface.Width/2,surface.Height/2).A==255,"desktop replica stays opaque when the VR panel is hidden");}
+        page.SetTransparency(0);
+        var submissions=0;
+        page.Session.Shockers.Inventory=()=>[new("fixture-shocker","Fixture","Mock",true,100,15000,false),new("fixture-second","Second","Mock",true,40,500,false)];
+        page.Session.Shockers.Send=(_,_,_,_,_)=>{submissions++;return true;};page.Session.SetPage(true);Display();Click(720,148);
+        Check(page.Session.PointerMode==pointerMode && !surface.Capture,"removed Touch button is inert on the desktop shocker page");
+        Click(393,658);Check(vrOpens==2,"same bottom-left VR icon opens from Shocker control");
+        Click(150,270);Display();Click(150,334);Check(page.Session.Shockers.Selected.Length==2 && submissions==0,"desktop original shocker rows select independently without output");
+        Display();Click(150,334);Check(page.Session.Shockers.Selected.Length==1,"desktop re-click deselects only one shocker");
+        Display();Mouse("OnMouseDown",454,305);Mouse("OnMouseUp",454,305);Click(983,376);Check(!page.Session.Shockers.Armed,"desktop Shock waits for current displayed intensity");
+        Display();Mouse("OnMouseDown",614,501);Mouse("OnMouseUp",614,501);Click(983,376);Check(!page.Session.Shockers.Armed,"desktop Shock waits for current displayed duration");
+        Display();Click(1088,308);Click(878,308);Check(!page.Session.Shockers.Armed && submissions==0,"removed ARM and SHOCK circles are inert");
+        Mouse("OnMouseDown",983,376);Mouse("OnMouseMove",983,548);Mouse("OnMouseUp",983,548);
+        Check(page.Session.Shockers.ArmedFromDesktop && submissions==0,"first Shock press only arms and held dragging cannot activate Sound");
+        Click(983,376);Check(submissions==0,"desktop confirmation waits until the armed state is painted");
+        Display();Mouse("OnMouseDown",983,376);Mouse("OnMouseMove",983,462);Mouse("OnMouseUp",983,462);
+        Check(submissions==1 && !page.Session.Shockers.Armed,"fresh second Shock press submits once and held dragging does not trigger Vibrate");
+        Display();Click(983,376);Click(521,658);Check(!page.Session.Shockers.Armed,"desktop Stop bypasses pending arm display");
+        Display();Click(983,376);Display();
+        using(var image=new Bitmap(surface.Width,surface.Height)) {surface.DrawToBitmap(image,surface.ClientRectangle);image.Save(Path.Combine(artifacts,"desktop-replica-shockers.png"));}
+        page.Session.Shockers.Cancel();page.Panel.Tick(ToyOscRouter.Clock);page.Panel.PreviewShocker("Shock","vr1");Display();Click(983,376);
+        Check(submissions==1 && !page.Session.Shockers.Armed,"desktop confirmation cannot complete an arm from the native panel");
+        page.Shutdown();preview.Hide();
     }
     private static void RenderFailure()
     {
         using var receiver=new Fixture();using var sender=new Fixture();using var local=new LocalToysPage();
         sender.Session.Receive("inventory",Element(receiver.Session.PublishInventory()));
-        using var page=new ToyControlPage(local,(_,_)=>{},_=>new BrokenPanelRenderer());page.Session.Remote=sender.Session.Toys;
+        using var page=new ToyControlPage(local,(_,_)=>{});page.Session.Remote=sender.Session.Toys;
+        page.RenderDesktopFrame=_=>throw new IOException("Injected desktop raster failure");
         using var preview=new Form {Width=850,Height=650,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
         preview.Controls.Add(page);preview.Show();Application.DoEvents();
         page.Session.Tick(ToyOscRouter.Clock);page.Session.Model.Functions.First().Function.Selected=true;page.Session.Draw(new(600,300),false,true);
-        page.Tick();
-        var worker=(PanelRenderWorker)typeof(ToyControlPage).GetField("renderer",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(page)!;
-        Wait(()=>worker.Failure is not null,"injected display error was not reported");page.Tick();
-        Check(sender.Session.Toys.Levels().Length==0 && page.Status.Contains("paused"),
-            "a background graphics failure preserves the existing pause and input-release behavior");preview.Hide();
+        var until=Environment.TickCount64+3000;
+        while(!page.Status.Contains("paused",StringComparison.OrdinalIgnoreCase) && Environment.TickCount64<until) {page.Tick();Application.DoEvents();Thread.Sleep(5);}
+        Check(page.Status.Contains("paused",StringComparison.OrdinalIgnoreCase) && sender.Session.Toys.Levels().Length==0,"raster failure suspends production remote input without replay");
+        page.Shutdown();preview.Hide();
     }
     private static void RenderGpu()
     {
@@ -189,19 +188,17 @@ internal static partial class Program
             session.Tick(ToyOscRouter.Clock);session.Model.Functions.First().Function.Selected=true;session.Model.Draw(.65f);
             worker.Submit(new(1240,608,ShaderState.From(session.DisplayModel,1240,608,(float)ToyOscRouter.Clock,0,0),0,null,[],ToyControlLabels.Capture(session),true));
             Wait(()=>worker.Ready || worker.Failure is not null,"background GPU preview did not finish",20000);
-            Check(worker.Failure is null && File.Exists(Path.Combine(artifacts,"background-toy-panel.png")),"the production graphics backend draws captured labels/state on its own thread");
+            Check(worker.Failure is null && File.Exists(Path.Combine(artifacts,"background-toy-panel.png")),"the historical shader fixture draws captured labels/state on its own thread");
         }
         finally {worker.Dispose();}
         Wait(()=>worker.Completed,"background GPU did not release its resources",10000);
         using var local=new LocalToysPage();using var page=new ToyControlPage(local,(_,_)=>{});
         using var preview=new Form {Width=850,Height=650,ShowInTaskbar=false,StartPosition=FormStartPosition.Manual,Location=new(-32000,-32000)};
         preview.Controls.Add(page);preview.Show();Application.DoEvents();page.Tick();
-        var windowWorker=(PanelRenderWorker)typeof(ToyControlPage).GetField("renderer",BindingFlags.NonPublic|BindingFlags.Instance)!.GetValue(page)!;
-        Wait(()=>{Application.DoEvents();return windowWorker.Ready || windowWorker.Failure is not null;},"background window renderer did not finish",20000);
-        Check(windowWorker.Failure is null,"the window swap chain can render and present without UI-thread graphics calls");
-        page.Tick();page.Shutdown();
-        Wait(()=>{Application.DoEvents();return windowWorker.Completed;},"window renderer did not release after page shutdown",10000);
-        Check(windowWorker.Completed,"window graphics cleanup finishes after nonblocking page shutdown");preview.Hide();
+        Wait(()=>{page.Tick();Application.DoEvents();return page.DesktopReady;},"native raster preview did not finish",20000);
+        Check(page.DesktopReady,"replicated desktop panel displays a completed immutable frame");
+        var closing=Stopwatch.GetTimestamp();page.Shutdown();
+        Check(Stopwatch.GetElapsedTime(closing).TotalMilliseconds<250,"native display shutdown does not wait for its rendering thread");preview.Hide();
     }
     private sealed class CapturePanelRenderer(string path,string output) : IPanelFrameRenderer
     {
