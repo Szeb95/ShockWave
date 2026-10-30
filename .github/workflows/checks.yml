@@ -56,7 +56,11 @@ jobs:
           $app = Join-Path $PWD 'overlay/bin/Release/net8.0-windows/win-x64/ShockWave.exe'
           $output = Join-Path $PWD 'work/integrated-panel-checks'
           $process = Start-Process -FilePath $app -ArgumentList @('--panel-self-test', ('"' + $output + '"')) -WindowStyle Hidden -Wait -PassThru
-          if ($process.ExitCode -ne 0) { throw 'Integrated panel checks failed.' }
+          if ($process.ExitCode -ne 0) {
+            $failure = Join-Path $output 'failure.txt'
+            if (Test-Path -LiteralPath $failure) { Get-Content -LiteralPath $failure }
+            throw "Integrated panel checks failed with exit code $($process.ExitCode)."
+          }
           $report = Get-Content -LiteralPath (Join-Path $output 'panel-integration.json') -Raw | ConvertFrom-Json
           if (-not $report.passed -or $report.total -lt 171) { throw 'Integrated panel verification is incomplete.' }
       - name: Check update validation, rollback and interface with fixtures
