@@ -54,7 +54,9 @@ jobs:
       - name: Check integrated SteamVR panel with simulated devices
         run: |
           $app = Join-Path $PWD 'overlay/bin/Release/net8.0-windows/win-x64/ShockWave.exe'
-          $output = Join-Path $PWD 'work/integrated-panel-checks'
+          # The fake stable-input installation must be beneath this test user's
+          # profile, even when GitHub checks the source out on another drive.
+          $output = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'ShockWave-integrated-panel-checks'
           $process = Start-Process -FilePath $app -ArgumentList @('--panel-self-test', ('"' + $output + '"')) -WindowStyle Hidden -Wait -PassThru
           if ($process.ExitCode -ne 0) {
             $failure = Join-Path $output 'failure.txt'
