@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>ShockWave</AssemblyName>
-    <Version>0.8.0</Version>
+    <Version>0.8.1</Version>
     <RootNamespace>ShockWave.Overlay</RootNamespace>
     <Product>ShockWave</Product>
     <Title>ShockWave</Title>
@@ -19,18 +19,17 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);dist/**</DefaultItemExcludes>
   </PropertyGroup>
   <ItemGroup>
-    <Content Include="SteamVr/app.vrmanifest" Link="app.vrmanifest" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
-    <Content Include="SteamVr/vendor/openvr_api.dll" Link="openvr_api.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/vendor/openvr_api.dll" Link="ToyControl/SteamVR/openvr_api.dll" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="SteamVr/vendor/LICENSE-OpenVR.txt" Link="licenses/LICENSE-OpenVR.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
-    <Content Include="SteamVr/vendor/version.json" Link="openvr-version.json" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
-    <Content Include="SteamVr/bindings/*.json" Link="bindings/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/vendor/version.json" Link="ToyControl/SteamVR/openvr-version.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="SteamVr/bindings/*.json" Link="ToyControl/SteamVR/bindings/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../LICENSE" Link="LICENSE" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../THIRD-PARTY.md" Link="THIRD-PARTY.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/UPDATES.md" Link="UPDATES.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
-    <Content Include="../docs/STEAMVR.md" Link="STEAMVR.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/STEAMVR.md" Link="docs/STEAMVR.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../work/ToyControlEditor/README.md" Link="TOY-CONTROL.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/lovense-remote/SPS.md" Link="SPS.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
-    <Content Include="../docs/lovense-remote/INTIFACE-PHONE.md" Link="INTIFACE-PHONE.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
+    <Content Include="../docs/lovense-remote/INTIFACE-PHONE.md" Link="docs/INTIFACE-PHONE.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/PISHOCK.md" Link="PISHOCK.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../docs/REMOTE.md" Link="REMOTE.md" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />
     <Content Include="../work/ShaderPanelTest/THIRD-PARTY.txt" Link="ToyControl/THIRD-PARTY.txt" CopyToPublishDirectory="Always" ExcludeFromSingleFile="true" />

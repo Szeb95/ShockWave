@@ -16,6 +16,10 @@ internal static class Program
                 Path.Combine(AppContext.BaseDirectory, "native", "lovense", "LovenseBLE_Lib.dll")));
             return;
         }
+        if(args.Length==2 && args[0]=="--steamvr-library-check")
+        {
+            Environment.ExitCode=SteamVr.VrPackageFiles.CheckLibrary(Path.GetFullPath(args[1]));return;
+        }
         ApplicationConfiguration.Initialize();
         if(args.Length==2 && args[0]=="--panel-self-test")
         {

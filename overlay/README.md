@@ -1,5 +1,9 @@
 # ShockWave overlay
 
+## Update compatibility — Windows 0.8.1
+
+SteamVR libraries/bindings now live beneath `ToyControl/SteamVR`, and added guides/build metadata beneath `docs`. Original updaters accept these paths. The app explicitly loads the nested pinned DLL, including when an older installation retains an obsolete root copy. The new layout preserves the existing stable user-data input registration; controls, settings, limits and output behavior are unchanged. Use Check for updates and Update to move directly from older releases.
+
 ## Integrated SteamVR release — Windows 0.8.0
 
 The app includes its own wrist menu and floating panel. Start SteamVR, then use the headset icon on Toy control or Shocker control. No Unity or avatar installation is required. Settings contains hand side, Wrist/Panel startup mode, automatic opening and whole-overlay transparency. See [SteamVR setup](../docs/STEAMVR.md). Test mode previews values while blocking physical commands; turn it off through Settings, save/confirm and start fresh input to use hardware.

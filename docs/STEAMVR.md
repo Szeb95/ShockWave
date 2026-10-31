@@ -1,5 +1,7 @@
 # ShockWave wrist and floating panel
 
+Version **0.8.1** restores the normal update path from older apps by placing native resources and new guides in compatible package directories. The existing per-user input registration and controller mappings are unchanged.
+
 The integrated SteamVR panel ships in **ShockWave 0.8.0**. Start SteamVR, open the app and use the headset icon on either control page. Unity and avatar installation are optional legacy integrations, separate from this overlay.
 
 ShockWave 0.7.30 recreates the desktop controls with GDI+ drawing, without using HLSL. The desktop keeps the function list and curve area. Both control pages have Open in VR, Recenter and Stop icons at the bottom left; Toy control adds Record after Stop. The old Clear curve and Stop all buttons are removed. The top toolbar, Play loop, duplicate headings, Touch and Toys/Shockers switch buttons are removed; use the app sidebar to choose Toy control or Shocker control. Shock uses one rectangular button matching Vibrate and Sound. SteamVR keeps the approved wrist/floating design, including its page-switch icon. Both views share connected toys, remote functions, recordings, Test mode, device limits and provider connections. No avatar installation is needed for the SteamVR panel. Existing uploaded avatars remain compatible; this update does not change Unity projects.

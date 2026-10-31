@@ -67,7 +67,11 @@ internal static class Launcher
         string root=Path.GetFullPath(Path.Combine(launcherDirectory,".."));
         string name="ShockWave-"+latest.Revision+"-win-x64";
         string folder=Path.Combine(root,name);string app=Path.Combine(folder,"ShockWave.exe");
-        foreach(string relative in new[]{"ShockWave.exe","build-info.json","openvr_api.dll","app.vrmanifest",Path.Combine("bindings","actions.json")})
+        bool nested=Directory.Exists(Path.Combine(folder,"ToyControl","SteamVR"));
+        string[] required=nested
+            ? new[]{"ShockWave.exe",Path.Combine("docs","build-info.json"),Path.Combine("ToyControl","SteamVR","openvr_api.dll"),Path.Combine("ToyControl","SteamVR","bindings","actions.json")}
+            : new[]{"ShockWave.exe","build-info.json","openvr_api.dll","app.vrmanifest",Path.Combine("bindings","actions.json")};
+        foreach(string relative in required)
             if(!File.Exists(Path.Combine(folder,relative))) throw new FileNotFoundException("The newest app folder is incomplete: "+relative);
         using(FileStream file=File.OpenRead(app))
         using(SHA256 sha=SHA256.Create())

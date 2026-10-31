@@ -1,0 +1,19 @@
+{
+  "version": "0.8.0",
+  "repository": "https://github.com/Szeb95/ShockWave",
+  "commit": "f2afe1996baf2123d5190c7fc2683fce121a87d6",
+  "files": [
+    {
+      "file": "AppUpdater.cs",
+      "sha256": "90F9C8A868B80845E95C9659419A4DBB25758150233233820E3525EF60848D3D"
+    },
+    {
+      "file": "UpdatePackage.cs",
+      "sha256": "D065ECAFFE5C137EB4A6C010595585DCACF34DC86422FA20CAFC563A67103250"
+    },
+    {
+      "file": "UpdateInstaller.cs",
+      "sha256": "CACE0A34F75118232EAECE7C955E998ECCA57AED7036FF203BD013B3900D119C"
+    }
+  ]
+}

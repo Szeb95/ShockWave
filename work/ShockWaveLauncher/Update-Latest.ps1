@@ -6,10 +6,13 @@ $ErrorActionPreference='Stop'
 $distribution=[IO.Path]::GetFullPath($DistributionRoot)
 $appFolder=Join-Path $distribution "ShockWave-$Version-win-x64"
 $app=Join-Path $appFolder 'ShockWave.exe'
-foreach($relative in @('ShockWave.exe','build-info.json','openvr_api.dll','app.vrmanifest','bindings/actions.json','node.exe','update-manifest.json')) {
+$nested=Test-Path -LiteralPath (Join-Path $appFolder 'ToyControl/SteamVR') -PathType Container
+$required=if($nested) {@('ShockWave.exe','docs/build-info.json','ToyControl/SteamVR/openvr_api.dll','ToyControl/SteamVR/bindings/actions.json','node.exe','update-manifest.json')} else {@('ShockWave.exe','build-info.json','openvr_api.dll','app.vrmanifest','bindings/actions.json','node.exe','update-manifest.json')}
+foreach($relative in $required) {
     if(-not (Test-Path -LiteralPath (Join-Path $appFolder $relative) -PathType Leaf)) {throw "Completed app is missing $relative"}
 }
-$build=Get-Content -LiteralPath (Join-Path $appFolder 'build-info.json') -Raw | ConvertFrom-Json
+$buildPath=if($nested) {'docs/build-info.json'} else {'build-info.json'}
+$build=Get-Content -LiteralPath (Join-Path $appFolder $buildPath) -Raw | ConvertFrom-Json
 if($build.Version -ne $Version -or $build.SelfChecks -lt 39) {throw 'The app is not a matching checked build.'}
 $latestFolder=Join-Path $distribution '00-Latest'
 New-Item -ItemType Directory -Path $latestFolder -Force | Out-Null

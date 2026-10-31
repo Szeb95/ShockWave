@@ -1,6 +1,6 @@
 # Updating ShockWave
 
-**0.7.x → 0.8.0:** install the full 0.8.0 ZIP manually once. Older updaters reject the new SteamVR library, manifests and bindings. Existing user-data settings remain separate and are reused. Version 0.8.0 recognizes these files for future updates.
+**0.8.1 fixes updates from older releases.** Use Check for updates and Update normally. SteamVR resources and build metadata now use directories understood by the original updater. The earlier 0.8.0 package required a manual full-ZIP installation; that workaround is not needed when updating directly to 0.8.1. Settings and protected credentials stay in the existing user-data folder.
 
 Open **Update** below **Settings** in the left navigation.
 

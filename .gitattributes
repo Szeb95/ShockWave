@@ -1,3 +1,4 @@
 # Pinned upstream bytes must survive Windows checkouts unchanged.
 /overlay/SteamVr/vendor/LICENSE-OpenVR.txt -text
 /overlay/SteamVr/vendor/openvr_api.cs -text
+/tests/update-compat/Legacy/**/*.cs -text

@@ -1,5 +1,5 @@
 param(
-    [string]$Version = '0.8.0',
+    [string]$Version = '0.8.1',
     [string]$OutputDirectory = '',
     [string[]]$PublishArguments = @(),
     [switch]$NoZip
@@ -77,9 +77,8 @@ Extract the WHOLE ZIP into a new folder and run ShockWave.exe.
 Node.js $releaseNodeVersion, .NET $releaseRuntime and Bluetooth engine 5.0.4 are included.
 Existing settings and encrypted credentials in LOCALAPPDATA/SzebsToys are reused.
 
-When moving from 0.7.x to 0.8.0, download and extract the full package manually
-once. Older updaters do not recognize the new SteamVR files. Version 0.8.0
-includes the updated validation for future SteamVR packages.
+Version 0.8.1 uses package paths understood by older updaters. Use Check for
+updates and Update in the app. Existing settings and credentials are kept.
 
 Update is below Settings. It checks Szeb95/ShockWave's published stable releases.
 Update downloads and verifies a complete package, closes normally and restarts.
@@ -93,7 +92,7 @@ permission. Third-party licenses remain separate.
 
 UnityEditor contains optional tool sources. Installation, avatar Update and upload
 are explicit user actions; updating this app never changes an existing Unity project.
-Read STEAMVR.md, REMOTE.md, TOY-CONTROL.md, SPS.md and PISHOCK.md for setup and current limits.
+Read docs/STEAMVR.md, REMOTE.md, TOY-CONTROL.md, SPS.md and PISHOCK.md for setup and current limits.
 
 Toy control and Shocker control recreate the classic desktop layout without HLSL.
 Touch, Toys/Shockers page-switch buttons and duplicate page headings are removed.
@@ -125,6 +124,11 @@ if($NoZip) {
     $releaseGuide.Replace('Extract the WHOLE ZIP into a new folder and run ShockWave.exe.','Run ShockWave.exe from this complete folder. Keep its files together.') | Set-Content -LiteralPath (Join-Path $releasePayload 'README.txt') -Encoding utf8
 }
 
+$releasePanelCheck=& (Join-Path $releaseRepo 'tests/steamvr/CheckPublishedPanel.ps1') -Executable (Join-Path $releasePayload 'ShockWave.exe')
+if(-not $releasePanelCheck.passed) {throw 'Integrated release verification failed'}
+$releaseDocs=Join-Path $releasePayload 'docs'
+New-Item -ItemType Directory -Path $releaseDocs -Force | Out-Null
+[ordered]@{Version=$Version;SelfChecks=$releasePanelCheck.selfChecks;Sha256=(Get-FileHash -LiteralPath (Join-Path $releasePayload 'ShockWave.exe')).Hash;NativeLibraryVerified=$true;PhysicalVerification=$false} | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $releaseDocs 'build-info.json') -Encoding utf8
 $releaseFiles = @(Get-ChildItem -LiteralPath $releasePayload -File -Recurse | Sort-Object FullName)
 foreach ($releaseFile in $releaseFiles) {
     if ($releaseFile.Name -match '^(api-token\.bin|pishock-api-key\.bin|remote-friends\.bin|bridge-config\.json|config\.json|activity\.log|.*\.pdb|.*\.test\.mjs|LovenseBLE_Lib\.dll)$') { throw "Private/debug/vendor file in release: $($releaseFile.Name)" }
@@ -140,6 +144,7 @@ if($NoZip) {
     return
 }
 [IO.Compression.ZipFile]::CreateFromDirectory($releasePayload, $releaseZip, [IO.Compression.CompressionLevel]::Optimal, $false)
+& (Join-Path $releaseRepo 'tests/update-compat/CheckPublishedCompatibility.ps1') -PackageZip $releaseZip
 $releaseZipHash = (Get-FileHash -LiteralPath $releaseZip -Algorithm SHA256).Hash.ToLowerInvariant()
 "$releaseZipHash  $([IO.Path]::GetFileName($releaseZip))" | Set-Content -LiteralPath "$releaseZip.sha256.txt" -Encoding ascii
 [ordered]@{ version=$Version; zip=$releaseZip; bytes=(Get-Item -LiteralPath $releaseZip).Length; sha256=$releaseZipHash; files=$releaseFiles.Count; physicalVerification=$false; published=$false } | ConvertTo-Json

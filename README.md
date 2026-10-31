@@ -21,7 +21,7 @@ ShockWave is a native Windows application for supported Bluetooth toys and OpenS
 
 **The SteamVR panel is included in the app.** It needs no Unity project, avatar installation or avatar upload.
 
-**Current development preview: [0.8.0 — integrated SteamVR controls](https://github.com/Szeb95/ShockWave/releases/tag/v0.8.0).** Get the complete Windows package from [Releases](https://github.com/Szeb95/ShockWave/releases/latest). See [verification and known limits](#verification-and-known-limits) before using hardware.
+**Integrated SteamVR controls are included.** Get the current complete Windows package from [Releases](https://github.com/Szeb95/ShockWave/releases/latest). See [verification and known limits](#verification-and-known-limits) before using hardware.
 
 ## What you can do
 
@@ -87,7 +87,7 @@ The older avatar panel remains optional for existing setups: [Creator Companion 
 
 ### Updates and saved settings
 
-**Moving from 0.7.x to 0.8.0:** download and extract the complete 0.8.0 package once. Older updaters do not recognize its added SteamVR files. Your saved settings remain in the same user-data folder; 0.8.0 includes updated validation for future SteamVR packages.
+**Version 0.8.1 restores the direct update path from older releases.** Its SteamVR files use directories recognized by the original updater. Use **Check for updates → Update**; the earlier 0.8.0 package required a manual download because it used new root-level paths. Your settings and credentials stay in the same user-data folder.
 
 **Update**, directly below Settings, shows the installed version, checks for published releases and links to the new version on GitHub. A newer compatible release adds **Update available** beside the Toy panel heading; clicking it opens Update. The **Update** button downloads and verifies the package, uses the existing normal-close confirmation, installs it and restarts ShockWave.
 

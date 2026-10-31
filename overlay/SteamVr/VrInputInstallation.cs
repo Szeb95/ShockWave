@@ -34,10 +34,15 @@ internal sealed record VrInputFiles(string Manifest,string Actions,string Binary
         }
         return DefaultDirectory;
     }
+    public static string ResourceDirectory(string package)
+    {
+        var nested=Path.Combine(package,"ToyControl","SteamVR");
+        return Directory.Exists(nested) ? nested : package;
+    }
     public static VrInputFiles Prepare(string package,string destination)
     {
         package=Path.GetFullPath(package);destination=Path.GetFullPath(destination);
-        var source=Path.Combine(package,"bindings");var target=Path.Combine(destination,"bindings");
+        var source=Path.Combine(ResourceDirectory(package),"bindings");var target=Path.Combine(destination,"bindings");
         var actions=Path.Combine(target,"actions.json");var binary=Path.Combine(package,"ShockWave.exe");
         if(!File.Exists(binary)) throw new IOException("ShockWave executable is missing");
         var actionText=File.ReadAllText(Path.Combine(source,"actions.json"));

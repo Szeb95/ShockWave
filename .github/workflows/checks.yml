@@ -53,15 +53,15 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Windows build failed.' }
       - name: Check integrated SteamVR panel with simulated devices
         run: |
-          $app = Join-Path $PWD 'overlay/bin/Release/net8.0-windows/win-x64/ShockWave.exe'
+          $app = Join-Path $PWD 'overlay/bin/Release/net8.0-windows/win-x64/ShockWave.dll'
           # The fake stable-input installation must be beneath this test user's
           # profile, even when GitHub checks the source out on another drive.
           $output = Join-Path ([Environment]::GetFolderPath('UserProfile')) 'ShockWave-integrated-panel-checks'
-          $process = Start-Process -FilePath $app -ArgumentList @('--panel-self-test', ('"' + $output + '"')) -WindowStyle Hidden -Wait -PassThru
-          if ($process.ExitCode -ne 0) {
+          dotnet $app --panel-self-test $output
+          if ($LASTEXITCODE -ne 0) {
             $failure = Join-Path $output 'failure.txt'
             if (Test-Path -LiteralPath $failure) { Get-Content -LiteralPath $failure }
-            throw "Integrated panel checks failed with exit code $($process.ExitCode)."
+            throw "Integrated panel checks failed with exit code $LASTEXITCODE."
           }
           $report = Get-Content -LiteralPath (Join-Path $output 'panel-integration.json') -Raw | ConvertFrom-Json
           if (-not $report.passed -or $report.total -lt 171) { throw 'Integrated panel verification is incomplete.' }
@@ -71,6 +71,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Update fixture build failed.' }
           ./tests/update/bin/Release/net8.0-windows/Update.Checks.exe
           if ($LASTEXITCODE -ne 0) { throw 'Update checks failed.' }
+      - name: Check unchanged public updater compatibility
+        run: |
+          foreach ($legacy in @('0.7.0', '0.7.11', '0.8.0')) {
+            dotnet run --project tests/update-compat/UpdaterCompatibility.Checks.csproj -c Release "-p:LegacyVersion=$legacy" -- --output "work/legacy-updater-checks/$legacy"
+            if ($LASTEXITCODE -ne 0) { throw "Legacy updater checks failed: $legacy" }
+          }
+      - name: Verify nested native SteamVR library without starting VR
+        run: |
+          $app = Join-Path $PWD 'overlay/bin/Release/net8.0-windows/win-x64/ShockWave.dll'
+          $output = Join-Path $PWD 'work/native-library-checks'
+          dotnet $app --steamvr-library-check $output
+          if ($LASTEXITCODE -ne 0) { Get-Content (Join-Path $output 'failure.txt'); throw 'Native library verification failed.' }
       - name: Check panel pointer and selection with simulated devices
         run: |
           dotnet run --project tests/toy-control/ToyControl.Checks.csproj -c Release -- work/panel-fixture-checks --warp
