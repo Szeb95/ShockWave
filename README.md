@@ -21,7 +21,7 @@ ShockWave is a native Windows application for supported Bluetooth toys and OpenS
 
 **The SteamVR panel is included in the app.** It needs no Unity project, avatar installation or avatar upload.
 
-**Integrated SteamVR controls are included.** Get the current complete Windows package from [Releases](https://github.com/Szeb95/ShockWave/releases/latest). See [verification and known limits](#verification-and-known-limits) before using hardware.
+**Current development preview: [0.8.1 — restored updates from older versions](https://github.com/Szeb95/ShockWave/releases/tag/v0.8.1).** Get the current complete Windows package from [Releases](https://github.com/Szeb95/ShockWave/releases/latest). See [verification and known limits](#verification-and-known-limits) before using hardware.
 
 ## What you can do
 
